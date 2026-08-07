@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiM Telemetry Pro - Ryan's Data Analyzer</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js for Telemetry Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        display: ['Chakra Petch', 'sans-serif']
+                    },
+                    colors: {
+                        racing: {
+                            red: '#ef4444',
+                            amber: '#f59e0b',
+                            green: '#10b981',
+                            blue: '#3b82f6',
+                            purple: '#8b5cf6',
+                            darkBg: '#090d16',
+                            panelBg: '#111827',
+                            cardBg: '#1f2937',
+                            border: '#374151'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #090d16;
+            color: #e5e7eb;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .font-display { font-family: 'Chakra Petch', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+
+        .glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.35); }
+        .glow-green { box-shadow: 0 0 15px rgba(16, 185, 129, 0.35); }
+        .glow-blue { box-shadow: 0 0 15px rgba(59, 130, 246, 0.35); }
+        .glow-amber { box-shadow: 0 0 15px rgba(245, 158, 11, 0.35); }
+        .glow-purple { box-shadow: 0 0 15px rgba(139, 92, 246, 0.35); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-racing-darkBg text-slate-200 antialiased">
+
+    <!-- Header -->
+    <header class="border-b border-racing-border bg-racing-panelBg/95 backdrop-blur sticky top-0 z-50 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 font-bold text-xl glow-blue">
+                    <i class="fa-solid fa-chart-diagram"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-display font-bold text-xl tracking-wider text-white">RYAN'S DATA ANALYZER</h1>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 border border-blue-500/40 text-blue-300 font-mono">AiM DRK v2.1</span>
+                        <span id="session-badge" class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-check-circle"></i> BRANDON LEWIS LOG LOADED
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 font-mono mt-0.5">
+                        TRACK: <span id="hdr-track" class="text-amber-400 font-semibold">Sonoma Raceway</span> | 
+                        VEHICLE: <span id="hdr-vehicle" class="text-slate-200 font-semibold">Spec Racer Ford #091</span> | 
+                        DRIVER: <span id="hdr-driver" class="text-slate-200 font-semibold">Brandon Lewis</span> |
+                        SESSION: <span id="hdr-session" class="text-red-400 font-semibold">Race 2 (Red Flag Incident)</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+                <label for="csv-file-input" class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-2 shadow glow-blue">
+                    <i class="fa-solid fa-file-csv"></i> Upload Data Files
+                </label>
+                <input id="csv-file-input" type="file" accept=".csv,.txt,.drk" multiple class="hidden" onchange="handleFileUpload(event)">
+
+                <button onclick="exportParsedDataCSV()" class="bg-racing-cardBg hover:bg-slate-700 text-slate-200 border border-racing-border px-3 py-2 rounded-lg transition flex items-center gap-2 font-mono">
+                    <i class="fa-solid fa-download text-blue-400"></i> Export Clean CSV
+                </button>
+
+                <button id="clear-data-button" onclick="clearAllData()" class="bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/40 px-3 py-2 rounded-lg transition flex items-center gap-2 font-mono">
+                    <i class="fa-solid fa-trash-can"></i> Clear All Data
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-6">
+
+        <!-- Active File Dropzone Container -->
+        <div id="dropzone-container" class="bg-racing-panelBg border border-racing-border rounded-xl p-3.5 transition-all duration-200 relative">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="flex items-center gap-3 text-left">
+                    <div class="h-9 w-9 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-base shrink-0">
+                        <i class="fa-solid fa-file-waveform"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs font-semibold text-slate-200 flex items-center gap-2">
+                            <span>File Ingested:</span>
+                            <span id="active-file-name" class="font-mono text-amber-300">250831_122039_SRF091_Brandon Lewis.drk</span>
+                            <span id="active-session-tag" class="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30 px-1.5 py-0.5 rounded">SCCA Race 2</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400">Session Notes: <span id="active-session-notes" class="text-slate-300 font-mono">"cluster f on grid, Lee have big crash, red flag"</span></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+                    <span id="stat-channel-count" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-blue-400">31 Channels</span>
+                    <span class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-purple-400">GPS + Engine ECU</span>
+                    <span id="stat-data-rate" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-emerald-400">Freq: 50Hz</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metric Gauges Row -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                    <span>GPS SPEED</span>
+                    <i class="fa-solid fa-gauge-high text-blue-400"></i>
+                </div>
+                <div class="my-2">
+                    <span id="gauge-speed" class="font-display font-bold text-3xl text-white">88.4</span>
+                    <span class="text-xs font-mono text-slate-400 ml-1">mph</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div id="bar-speed" class="bg-blue-500 h-1.5 rounded-full transition-all duration-75" style="width: 75%"></div>
+                </div>
+            </div>
+
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                    <span>ENGINE RPM</span>
+                    <i class="fa-solid fa-tachograph-digital text-emerald-400"></i>
+                </div>
+                <div class="my-2">
+                    <span id="gauge-rpm" class="font-display font-bold text-3xl text-emerald-400">6250</span>
+                    <span class="text-xs font-mono text-slate-400 ml-1">rpm</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div id="bar-rpm" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-75" style="width: 88%"></div>
+                </div>
+            </div>
+
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                    <span>SRF GEAR</span>
+                    <i class="fa-solid fa-gears text-purple-400"></i>
+                </div>
+                <div class="my-2 flex items-baseline gap-2">
+                    <span id="gauge-gear" class="font-display font-bold text-3xl text-purple-400">4</span>
+                    <span class="text-xs text-slate-500 font-mono">SRF3 5-Spd</span>
+                </div>
+                <div class="text-[10px] text-slate-400 font-mono">Channel: SRF_GEAR</div>
+            </div>
+
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                    <span>THROTTLE</span>
+                    <i class="fa-solid fa-bolt text-amber-400"></i>
+                </div>
+                <div class="my-2">
+                    <span id="gauge-tps" class="font-display font-bold text-3xl text-amber-400">100</span>
+                    <span class="text-xs font-mono text-slate-400 ml-1">%</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div id="bar-tps" class="bg-amber-400 h-1.5 rounded-full transition-all duration-75" style="width: 100%"></div>
+                </div>
+            </div>
+
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                    <span>BRAKE FRONT</span>
+                    <i class="fa-solid fa-compact-disc text-red-400"></i>
+                </div>
+                <div class="my-2">
+                    <span id="gauge-brake" class="font-display font-bold text-3xl text-red-400">0</span>
+                    <span class="text-xs font-mono text-slate-400 ml-1">psi</span>
+                </div>
+                <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div id="bar-brake" class="bg-red-500 h-1.5 rounded-full transition-all duration-75" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                    <span>STEERING RING</span>
+                    <i class="fa-solid fa-dharmachakra text-teal-400"></i>
+                </div>
+                <div class="my-2">
+                    <span id="gauge-steer" class="font-display font-bold text-3xl text-teal-300">-4.2°</span>
+                </div>
+                <div class="text-[10px] text-slate-400 font-mono">Steering Sensor</div>
+            </div>
+
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
+                <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                    <span>LAT G-FORCE</span>
+                    <i class="fa-solid fa-arrows-left-right text-pink-400"></i>
+                </div>
+                <div class="my-2">
+                    <span id="gauge-latg" class="font-display font-bold text-3xl text-pink-400">1.34</span>
+                    <span class="text-xs font-mono text-slate-400 ml-1">G</span>
+                </div>
+                <div class="text-[10px] text-slate-400 font-mono">GPS_LatAcc</div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="border-b border-racing-border flex space-x-2 font-mono text-xs">
+            <button onclick="switchTab('telemetry')" id="tab-btn-telemetry" class="tab-btn px-4 py-2.5 rounded-t-lg bg-blue-600 text-white font-semibold transition border-t border-x border-blue-500 flex items-center gap-2">
+                <i class="fa-solid fa-chart-line"></i> Telemetry Views
+            </button>
+            <button onclick="switchTab('audit')" id="tab-btn-audit" class="tab-btn px-4 py-2.5 rounded-t-lg bg-racing-panelBg text-slate-400 hover:text-slate-200 transition border-t border-x border-transparent flex items-center gap-2">
+                <i class="fa-solid fa-list-check"></i> Channel Audit
+            </button>
+            <button onclick="switchTab('mechanic')" id="tab-btn-mechanic" class="tab-btn px-4 py-2.5 rounded-t-lg bg-racing-panelBg text-slate-400 hover:text-slate-200 transition border-t border-x border-transparent flex items-center gap-2">
+                <i class="fa-solid fa-wrench"></i> Engine Health
+            </button>
+            <button onclick="switchTab('ai')" id="tab-btn-ai" class="tab-btn px-4 py-2.5 rounded-t-lg bg-racing-panelBg text-slate-400 hover:text-slate-200 transition border-t border-x border-transparent flex items-center gap-2">
+                <i class="fa-solid fa-brain"></i> AI Coaching
+            </button>
+        </div>
+
+        <!-- TAB 1: TELEMETRY VIEWS -->
+        <div id="tab-content-telemetry" class="tab-content space-y-6">
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-racing-border pb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-wave-square text-blue-400 text-lg"></i>
+                        <h2 class="font-display font-bold text-base text-white">PRIMARY TRACE: LAP 3 OPTIMAL RUN</h2>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs font-mono">
+                        <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-blue-400 inline-block rounded"></span> Speed (mph)</span>
+                        <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-amber-400 inline-block rounded"></span> Throttle (%)</span>
+                        <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-red-500 inline-block rounded"></span> Brake (psi)</span>
+                    </div>
+                </div>
+
+                <div class="h-64 relative">
+                    <canvas id="chart-telemetry-speed"></canvas>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+                    <div class="bg-racing-cardBg border border-racing-border rounded-lg p-3 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-mono">
+                            <span class="text-slate-300 font-semibold"><i class="fa-solid fa-tachograph-digital text-emerald-400"></i> ENGINE RPM & GEAR SHIFTS</span>
+                            <span class="text-emerald-400">Redline: 6800 RPM</span>
+                        </div>
+                        <div class="h-44 relative">
+                            <canvas id="chart-telemetry-rpm"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-racing-cardBg border border-racing-border rounded-lg p-3 space-y-2">
+                        <div class="flex items-center justify-between text-xs font-mono">
+                            <span class="text-slate-300 font-semibold"><i class="fa-solid fa-dharmachakra text-teal-400"></i> STEERING ANGLE & LATERAL G</span>
+                            <span class="text-pink-400">Peak Lat: 1.82 G</span>
+                        </div>
+                        <div class="h-44 relative">
+                            <canvas id="chart-telemetry-handling"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Track Map & Apex Speeds -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+                            <i class="fa-solid fa-map-location-dot text-amber-400"></i> SONOMA GPS TRACK MAP
+                        </h3>
+                        <span class="text-[11px] font-mono text-emerald-400"><i class="fa-solid fa-satellite"></i> 10Hz GPS Fix</span>
+                    </div>
+                    <div class="h-60 relative bg-slate-950/80 rounded-lg border border-racing-border flex items-center justify-center overflow-hidden">
+                        <canvas id="chart-gps-map" class="w-full h-full p-2"></canvas>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-3">
+                    <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-area text-blue-400"></i> CORNER MINIMUM SPEED ANALYSIS (APEX SPEEDS)
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
+                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
+                            <div class="text-slate-400 text-[10px]">T2 (Uphill)</div>
+                            <div class="text-amber-400 font-bold text-base my-0.5">54.2 mph</div>
+                            <div class="text-[9px] text-emerald-400">+1.8 mph vs Avg</div>
+                        </div>
+                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
+                            <div class="text-slate-400 text-[10px]">T3A (Off-Camber)</div>
+                            <div class="text-amber-400 font-bold text-base my-0.5">62.8 mph</div>
+                            <div class="text-[9px] text-slate-400">Nominal</div>
+                        </div>
+                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
+                            <div class="text-slate-400 text-[10px]">Carousel T6</div>
+                            <div class="text-amber-400 font-bold text-base my-0.5">68.5 mph</div>
+                            <div class="text-[9px] text-emerald-400">+2.4 mph vs Avg</div>
+                        </div>
+                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
+                            <div class="text-slate-400 text-[10px]">T11 (Hairpin)</div>
+                            <div class="text-amber-400 font-bold text-base my-0.5">32.1 mph</div>
+                            <div class="text-[9px] text-red-400">-1.2 mph vs Best</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: AUDIT -->
+        <div id="tab-content-audit" class="tab-content hidden space-y-4">
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-racing-border pb-3">
+                    <div>
+                        <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-emerald-400"></i> DRK FILE CHANNEL INVENTORY & SENSOR HEALTH
+                        </h3>
+                        <p class="text-xs text-slate-400">31 Channels imported from AiM Data Logger file <span class="font-mono text-amber-300">250831_122039_SRF091_Brandon Lewis.drk</span></p>
+                    </div>
+                    <div class="flex items-center gap-2 font-mono text-xs">
+                        <span class="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">31 Active</span>
+                        <span class="px-2.5 py-1 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">0 Errors</span>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs font-mono">
+                        <thead>
+                            <tr class="bg-racing-cardBg border-b border-racing-border text-slate-400">
+                                <th class="p-2.5">CHANNEL NAME</th>
+                                <th class="p-2.5">SOURCE / SENSOR</th>
+                                <th class="p-2.5">UNIT</th>
+                                <th class="p-2.5">FREQ (Hz)</th>
+                                <th class="p-2.5">MIN VAL</th>
+                                <th class="p-2.5">MAX VAL</th>
+                                <th class="p-2.5">STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-table-body" class="divide-y divide-racing-border/50 text-slate-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: MECHANIC -->
+        <div id="tab-content-mechanic" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                        <span>WATER TEMP</span>
+                        <i class="fa-solid fa-temperature-high text-blue-400"></i>
+                    </div>
+                    <div class="font-display font-bold text-3xl text-emerald-400">198.5 °F</div>
+                    <div class="text-xs font-mono text-slate-400">Optimal Range (185-210°F)</div>
+                </div>
+
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                        <span>OIL PRESSURE</span>
+                        <i class="fa-solid fa-oil-can text-amber-400"></i>
+                    </div>
+                    <div class="font-display font-bold text-3xl text-emerald-400">54.2 PSI</div>
+                    <div class="text-xs font-mono text-slate-400">Safe Baseline (>45 PSI)</div>
+                </div>
+
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                        <span>BATTERY VOLTAGE</span>
+                        <i class="fa-solid fa-car-battery text-purple-400"></i>
+                    </div>
+                    <div class="font-display font-bold text-3xl text-white">13.8 V</div>
+                    <div class="text-xs font-mono text-slate-400">Alternator Active</div>
+                </div>
+
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                        <span>LAMBDA / AFR</span>
+                        <i class="fa-solid fa-gauge-simple-high text-teal-400"></i>
+                    </div>
+                    <div class="font-display font-bold text-3xl text-teal-300">0.86 <span class="text-xs text-slate-400 font-mono">(12.6 AFR)</span></div>
+                    <div class="text-xs font-mono text-slate-400">Optimal WOT Power Ratio</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
+                    <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-microchip text-purple-400"></i> SPEC RACER FORD ECU DIAGNOSTICS & ALERTS
+                    </h3>
+                    <div class="space-y-2.5 font-mono text-xs">
+                        <div class="p-3 bg-racing-cardBg border border-emerald-500/30 rounded-lg flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+                                <div>
+                                    <div class="text-slate-200 font-bold">ECU Fault Code Check</div>
+                                    <div class="text-slate-400 text-[11px]">No active DTC engine fault codes recorded during session.</div>
+                                </div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">PASS</span>
+                        </div>
+
+                        <div class="p-3 bg-racing-cardBg border border-amber-500/30 rounded-lg flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
+                                <div>
+                                    <div class="text-slate-200 font-bold">Grid Idle Voltage Low</div>
+                                    <div class="text-slate-400 text-[11px]">Battery voltage dropped to 11.9V during extended grid red flag wait.</div>
+                                </div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">INFO</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
+                    <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-gears text-blue-400"></i> ENGINE & TRANSMISSION METRICS
+                    </h3>
+                    <div class="space-y-3 font-mono text-xs">
+                        <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex justify-between items-center">
+                            <span class="text-slate-400">Total Session Engine Hours</span>
+                            <span class="text-white font-bold">0.42 hrs (18.4 hrs Cumulative)</span>
+                        </div>
+                        <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex justify-between items-center">
+                            <span class="text-slate-400">Shift Overrev Occurrences (>7100 RPM)</span>
+                            <span class="text-emerald-400 font-bold">0 Clean</span>
+                        </div>
+                        <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex justify-between items-center">
+                            <span class="text-slate-400">Peak Water Temp Recorded</span>
+                            <span class="text-amber-400 font-bold">203.4 °F (Lap 7 Pit In)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: COACHING -->
+        <div id="tab-content-ai" class="tab-content hidden space-y-6">
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between border-b border-racing-border pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xl glow-amber">
+                            <i class="fa-solid fa-brain"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-display font-bold text-base text-white">AI DRIVER COACHING & SONOMA LAP OPTIMIZATION</h3>
+                            <p class="text-xs text-slate-400">Comparing Lap 3 (1:48.234 Best) against Sonoma SRF Benchmark Data</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-mono font-bold">
+                        Pot. Gain: -0.424s
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-racing-cardBg border border-racing-border rounded-xl p-4 space-y-2 relative">
+                        <div class="text-xs font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullseye"></i> TURN 2 - 3A ELEVATION
+                        </div>
+                        <div class="text-xs text-slate-200">
+                            Braking 12ft too early on T2 uphill crest. Carrying speed uphill is safe in SRF3 due to compression grip.
+                        </div>
+                        <div class="text-xs font-mono text-emerald-400 pt-2 border-t border-racing-border flex justify-between">
+                            <span>Estimated Time Gain:</span>
+                            <span class="font-bold">-0.180s</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-racing-cardBg border border-racing-border rounded-xl p-4 space-y-2 relative">
+                        <div class="text-xs font-mono font-bold text-blue-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullseye"></i> CAROUSEL TURN 6 SWEEP
+                        </div>
+                        <div class="text-xs text-slate-200">
+                            Slight throttle hesitation mid-carousel. Hold steady 65% TPS to maintain rear compression before launching down to T7.
+                        </div>
+                        <div class="text-xs font-mono text-emerald-400 pt-2 border-t border-racing-border flex justify-between">
+                            <span>Estimated Time Gain:</span>
+                            <span class="font-bold">-0.124s</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-racing-cardBg border border-racing-border rounded-xl p-4 space-y-2 relative">
+                        <div class="text-xs font-mono font-bold text-purple-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullseye"></i> TURN 11 HAIRPIN EXIT
+                        </div>
+                        <div class="text-xs text-slate-200">
+                            Late throttle application on hairpin exit. Trail brake deeper to rotate quicker and pick up full throttle 8ft earlier.
+                        </div>
+                        <div class="text-xs font-mono text-emerald-400 pt-2 border-t border-racing-border flex justify-between">
+                            <span>Estimated Time Gain:</span>
+                            <span class="font-bold">-0.120s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Script Block -->
+    <script>
+        // DRK Channel Data Definition
+        const drkChannels = [
+            { name: "GPS_Speed", source: "GPS Module", unit: "mph", freq: 10, min: 0.0, max: 108.4, status: "OK" },
+            { name: "SRF_RPM", source: "Ford ECU CAN", unit: "rpm", freq: 50, min: 1100, max: 6780, status: "OK" },
+            { name: "SRF_TPS", source: "Throttle Sensor", unit: "%", freq: 50, min: 0, max: 100, status: "OK" },
+            { name: "Brake_Press_F", source: "Pressure Transducer", unit: "psi", freq: 50, min: 0, max: 1150, status: "OK" },
+            { name: "Steer_Angle", source: "Rotary Pot", unit: "deg", freq: 50, min: -180, max: 180, status: "OK" },
+            { name: "GPS_LatAcc", source: "GPS IMU", unit: "G", freq: 10, min: -1.82, max: 1.85, status: "OK" },
+            { name: "Water_Temp", source: "Engine Sensors", unit: "deg F", freq: 5, min: 140, max: 203.4, status: "OK" },
+            { name: "Oil_Press", source: "Engine Sensors", unit: "psi", freq: 20, min: 28.5, max: 62.1, status: "OK" }
+        ];
+
+        // Populate Audit Table
+        function renderAuditTable() {
+            const tbody = document.getElementById("audit-table-body");
+            if (!tbody) return;
+            tbody.innerHTML = drkChannels.map(ch => `
+                <tr class="hover:bg-slate-800/50 transition">
+                    <td class="p-2.5 font-bold text-white">${ch.name}</td>
+                    <td class="p-2.5 text-slate-400">${ch.source}</td>
+                    <td class="p-2.5 text-blue-400">${ch.unit}</td>
+                    <td class="p-2.5 text-purple-400">${ch.freq} Hz</td>
+                    <td class="p-2.5 text-slate-300">${ch.min}</td>
+                    <td class="p-2.5 text-slate-300">${ch.max}</td>
+                    <td class="p-2.5"><span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">${ch.status}</span></td>
+                </tr>
+            `).join("");
+        }
+
+        // Tab Switching Logic
+        function switchTab(tabId) {
+            document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
+            document.querySelectorAll(".tab-btn").forEach(el => {
+                el.classList.remove("bg-blue-600", "text-white", "border-blue-500");
+                el.classList.add("bg-racing-panelBg", "text-slate-400", "border-transparent");
+            });
+
+            const targetContent = document.getElementById(`tab-content-${tabId}`);
+            const targetBtn = document.getElementById(`tab-btn-${tabId}`);
+
+            if (targetContent) targetContent.classList.remove("hidden");
+            if (targetBtn) {
+                targetBtn.classList.remove("bg-racing-panelBg", "text-slate-400", "border-transparent");
+                targetBtn.classList.add("bg-blue-600", "text-white", "border-blue-500");
+            }
+        }
+
+        // Action Handlers
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                document.getElementById("active-file-name").innerText = files[0].name;
+                alert(`Successfully loaded: ${files[0].name}`);
+            }
+        }
+
+        function exportParsedDataCSV() {
+            alert("Exporting clean telemetry data to CSV...");
+        }
+
+        function clearAllData() {
+            if (confirm("Are you sure you want to clear all loaded telemetry data?")) {
+                document.getElementById("active-file-name").innerText = "No file loaded";
+            }
+        }
+
+        // Chart Initialization
+        window.addEventListener("DOMContentLoaded", () => {
+            renderAuditTable();
+
+            const chartDefaults = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: "#374151" }, ticks: { color: "#9ca3af" } },
+                    y: { grid: { color: "#374151" }, ticks: { color: "#9ca3af" } }
+                }
+            };
+
+            // Speed / Throttle / Brake Chart
+            new Chart(document.getElementById("chart-telemetry-speed"), {
+                type: "line",
+                data: {
+                    labels: Array.from({length: 30}, (_, i) => `${i * 2}s`),
+                    datasets: [
+                        { label: "Speed", data: [45, 52, 68, 80, 92, 98, 102, 70, 54, 62, 75, 88, 95, 100, 105, 60, 48, 55, 72, 85, 94, 98, 65, 32, 42, 60, 78, 89, 96, 100], borderColor: "#3b82f6", borderWidth: 2, pointRadius: 0 },
+                        { label: "Throttle", data: [100, 100, 100, 100, 100, 100, 0, 0, 80, 100, 100, 100, 100, 100, 0, 0, 60, 100, 100, 100, 100, 0, 0, 0, 100, 100, 100, 100, 100, 100], borderColor: "#f59e0b", borderWidth: 1.5, pointRadius: 0 },
+                        { label: "Brake", data: [0, 0, 0, 0, 0, 0, 800, 400, 0, 0, 0, 0, 0, 0, 900, 300, 0, 0, 0, 0, 0, 600, 200, 1000, 0, 0, 0, 0, 0, 0], borderColor: "#ef4444", borderWidth: 1.5, pointRadius: 0 }
+                    ]
+                },
+                options: chartDefaults
+            });
+
+            // RPM Chart
+            new Chart(document.getElementById("chart-telemetry-rpm"), {
+                type: "line",
+                data: {
+                    labels: Array.from({length: 20}, (_, i) => i),
+                    datasets: [{ label: "RPM", data: [4200, 5100, 6100, 6700, 5200, 6300, 6750, 5400, 6400, 4800, 5900, 6600, 5100, 6200, 6700, 4500, 5800, 6500, 5000, 6100], borderColor: "#10b981", borderWidth: 2, pointRadius: 0 }]
+                },
+                options: chartDefaults
+            });
+
+            // Handling Chart
+            new Chart(document.getElementById("chart-telemetry-handling"), {
+                type: "line",
+                data: {
+                    labels: Array.from({length: 20}, (_, i) => i),
+                    datasets: [
+                        { label: "Steering", data: [0, 5, -12, -45, -30, 10, 55, 20, -5, -60, -80, -20, 0, 15, -40, -110, -15, 0, 10, -35], borderColor: "#14b8a6", borderWidth: 1.5, pointRadius: 0 },
+                        { label: "Lat G", data: [0, 0.2, -0.6, -1.4, -1.1, 0.3, 1.6, 0.8, -0.1, -1.7, -1.8, -0.5, 0, 0.4, -1.2, -1.8, -0.3, 0, 0.3, -1.1], borderColor: "#ec4899", borderWidth: 1.5, pointRadius: 0 }
+                    ]
+                },
+                options: chartDefaults
+            });
+
+            // GPS Track Map Chart
+            new Chart(document.getElementById("chart-gps-map"), {
+                type: "scatter",
+                data: {
+                    datasets: [{
+                        label: "Sonoma Raceway",
+                        data: [
+                            {x: 10, y: 10}, {x: 15, y: 25}, {x: 25, y: 45}, {x: 35, y: 55}, {x: 50, y: 60},
+                            {x: 65, y: 50}, {x: 75, y: 35}, {x: 80, y: 20}, {x: 70, y: 10}, {x: 50, y: 12},
+                            {x: 35, y: 8}, {x: 20, y: 5}, {x: 10, y: 10}
+                        ],
+                        borderColor: "#f59e0b",
+                        backgroundColor: "#f59e0b",
+                        showLine: true,
+                        borderWidth: 3,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { display: false }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
