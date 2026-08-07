@@ -57,6 +57,7 @@
         .font-display { font-family: 'Chakra Petch', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
 
+        /* Custom Motorsport Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #111827; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
@@ -67,11 +68,21 @@
         .glow-blue { box-shadow: 0 0 15px rgba(59, 130, 246, 0.35); }
         .glow-amber { box-shadow: 0 0 15px rgba(245, 158, 11, 0.35); }
         .glow-purple { box-shadow: 0 0 15px rgba(139, 92, 246, 0.35); }
+
+        .dropzone-active {
+            border-color: #3b82f6 !important;
+            background-color: rgba(59, 130, 246, 0.1) !important;
+        }
+
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .animate-pulse-fast { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col bg-racing-darkBg text-slate-200 antialiased">
 
-    <!-- Header -->
     <header class="border-b border-racing-border bg-racing-panelBg/95 backdrop-blur sticky top-0 z-50 px-4 py-3">
         <div class="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -95,11 +106,18 @@
                 </div>
             </div>
 
+            <!-- Header Action Controls -->
             <div class="flex flex-wrap items-center gap-2 text-xs">
                 <label for="csv-file-input" class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-2 shadow glow-blue">
-                    <i class="fa-solid fa-file-csv"></i> Upload Data Files
+                    <i class="fa-solid fa-file-waveform"></i> Upload Telemetry
                 </label>
-                <input id="csv-file-input" type="file" accept=".csv,.txt,.drk" multiple class="hidden" onchange="handleFileUpload(event)">
+                <input id="csv-file-input" type="file" accept=".csv,.txt,.xrk,.drk" multiple class="hidden" onchange="handleFileUpload(event)">
+
+                <label for="asd-file-input" class="cursor-pointer bg-purple-700 hover:bg-purple-600 text-white font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-2 shadow">
+                    <i class="fa-solid fa-map-pin"></i> Track Definition <span class="opacity-60 text-xs">.asd</span>
+                </label>
+                <input id="asd-file-input" type="file" accept=".asd" class="hidden" onchange="handleAsdUpload(event)">
+                <span id="asd-status" class="text-[10px] font-mono text-slate-500 hidden"><i class="fa-solid fa-circle-check text-purple-400"></i> <span id="asd-filename"></span></span>
 
                 <button onclick="exportParsedDataCSV()" class="bg-racing-cardBg hover:bg-slate-700 text-slate-200 border border-racing-border px-3 py-2 rounded-lg transition flex items-center gap-2 font-mono">
                     <i class="fa-solid fa-download text-blue-400"></i> Export Clean CSV
@@ -114,7 +132,6 @@
 
     <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-6">
 
-        <!-- Active File Dropzone Container -->
         <div id="dropzone-container" class="bg-racing-panelBg border border-racing-border rounded-xl p-3.5 transition-all duration-200 relative">
             <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div class="flex items-center gap-3 text-left">
@@ -132,68 +149,77 @@
                 </div>
                 <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
                     <span id="stat-channel-count" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-blue-400">31 Channels</span>
-                    <span class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-purple-400">GPS + Engine ECU</span>
+                    <span id="stat-source-type" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-purple-400">GPS + Engine ECU</span>
+                    <span id="stat-sector-source" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-slate-500 hidden">3 Sectors</span>
                     <span id="stat-data-rate" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-emerald-400">Freq: 50Hz</span>
                 </div>
             </div>
+            <div id="uploaded-sessions" class="mt-3 hidden border-t border-racing-border pt-3">
+                <div class="text-[10px] uppercase tracking-wider font-mono text-slate-500 mb-2">Uploaded sessions — select one to make it active</div>
+                <div id="uploaded-sessions-list" class="flex flex-wrap gap-2"></div>
+            </div>
         </div>
 
-        <!-- Metric Gauges Row -->
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <!-- Speed Gauge -->
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
                 <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
                     <span>GPS SPEED</span>
                     <i class="fa-solid fa-gauge-high text-blue-400"></i>
                 </div>
                 <div class="my-2">
-                    <span id="gauge-speed" class="font-display font-bold text-3xl text-white">88.4</span>
-                    <span class="text-xs font-mono text-slate-400 ml-1">mph</span>
+                    <span id="gauge-speed" class="font-display font-bold text-3xl text-white">0.0</span>
+                    <span id="unit-speed" class="text-xs font-mono text-slate-400 ml-1">mph</span>
                 </div>
                 <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div id="bar-speed" class="bg-blue-500 h-1.5 rounded-full transition-all duration-75" style="width: 75%"></div>
+                    <div id="bar-speed" class="bg-blue-500 h-1.5 rounded-full transition-all duration-75" style="width: 0%"></div>
                 </div>
             </div>
 
+            <!-- RPM Gauge -->
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
                 <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
                     <span>ENGINE RPM</span>
                     <i class="fa-solid fa-tachograph-digital text-emerald-400"></i>
                 </div>
                 <div class="my-2">
-                    <span id="gauge-rpm" class="font-display font-bold text-3xl text-emerald-400">6250</span>
-                    <span class="text-xs font-mono text-slate-400 ml-1">rpm</span>
+                    <span id="gauge-rpm" class="font-display font-bold text-3xl text-emerald-400">0</span>
+                    <span id="unit-rpm" class="text-xs font-mono text-slate-400 ml-1">rpm</span>
                 </div>
                 <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div id="bar-rpm" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-75" style="width: 88%"></div>
+                    <div id="bar-rpm" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-75" style="width: 0%"></div>
                 </div>
             </div>
 
+            <!-- Gear Gauge -->
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
                 <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
                     <span>SRF GEAR</span>
                     <i class="fa-solid fa-gears text-purple-400"></i>
                 </div>
                 <div class="my-2 flex items-baseline gap-2">
-                    <span id="gauge-gear" class="font-display font-bold text-3xl text-purple-400">4</span>
+                    <span id="gauge-gear" class="font-display font-bold text-3xl text-purple-400">1</span>
                     <span class="text-xs text-slate-500 font-mono">SRF3 5-Spd</span>
                 </div>
                 <div class="text-[10px] text-slate-400 font-mono">Channel: SRF_GEAR</div>
             </div>
 
+            <!-- Throttle Gauge -->
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
                 <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
                     <span>THROTTLE</span>
                     <i class="fa-solid fa-bolt text-amber-400"></i>
                 </div>
                 <div class="my-2">
-                    <span id="gauge-tps" class="font-display font-bold text-3xl text-amber-400">100</span>
-                    <span class="text-xs font-mono text-slate-400 ml-1">%</span>
+                    <span id="gauge-tps" class="font-display font-bold text-3xl text-amber-400">0</span>
+                    <span id="unit-tps" class="text-xs font-mono text-slate-400 ml-1">%</span>
                 </div>
                 <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div id="bar-tps" class="bg-amber-400 h-1.5 rounded-full transition-all duration-75" style="width: 100%"></div>
+                    <div id="bar-tps" class="bg-amber-400 h-1.5 rounded-full transition-all duration-75" style="width: 0%"></div>
                 </div>
             </div>
 
+            <!-- Brake Front Pressure Gauge -->
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
                 <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
                     <span>BRAKE FRONT</span>
@@ -201,465 +227,768 @@
                 </div>
                 <div class="my-2">
                     <span id="gauge-brake" class="font-display font-bold text-3xl text-red-400">0</span>
-                    <span class="text-xs font-mono text-slate-400 ml-1">psi</span>
+                    <span id="unit-brake" class="text-xs font-mono text-slate-400 ml-1">psi</span>
                 </div>
                 <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                     <div id="bar-brake" class="bg-red-500 h-1.5 rounded-full transition-all duration-75" style="width: 0%"></div>
                 </div>
             </div>
 
+            <!-- Steering Angle -->
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
                 <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
                     <span>STEERING RING</span>
                     <i class="fa-solid fa-dharmachakra text-teal-400"></i>
                 </div>
                 <div class="my-2">
-                    <span id="gauge-steer" class="font-display font-bold text-3xl text-teal-300">-4.2°</span>
+                    <span id="gauge-steer" class="font-display font-bold text-3xl text-teal-300">0°</span>
                 </div>
                 <div class="text-[10px] text-slate-400 font-mono">Steering Sensor</div>
             </div>
 
+            <!-- Lateral G -->
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3 flex flex-col justify-between">
                 <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
                     <span>LAT G-FORCE</span>
                     <i class="fa-solid fa-arrows-left-right text-pink-400"></i>
                 </div>
                 <div class="my-2">
-                    <span id="gauge-latg" class="font-display font-bold text-3xl text-pink-400">1.34</span>
+                    <span id="gauge-latg" class="font-display font-bold text-3xl text-pink-400">0.00</span>
                     <span class="text-xs font-mono text-slate-400 ml-1">G</span>
                 </div>
                 <div class="text-[10px] text-slate-400 font-mono">GPS_LatAcc</div>
             </div>
         </div>
 
-        <!-- Navigation Tabs -->
-        <div class="border-b border-racing-border flex space-x-2 font-mono text-xs">
-            <button onclick="switchTab('telemetry')" id="tab-btn-telemetry" class="tab-btn px-4 py-2.5 rounded-t-lg bg-blue-600 text-white font-semibold transition border-t border-x border-blue-500 flex items-center gap-2">
-                <i class="fa-solid fa-chart-line"></i> Telemetry Views
+        <div class="border-b border-racing-border flex items-center gap-2 overflow-x-auto pb-1">
+            <button id="tab-btn-snapshot" onclick="switchTab('snapshot')" class="tab-btn active bg-blue-600/20 text-blue-400 border border-blue-500/40 px-4 py-2 rounded-lg font-display text-sm font-semibold flex items-center gap-2 transition shrink-0">
+                <i class="fa-solid fa-stopwatch text-emerald-400"></i> Session Snapshot & Lap Times
             </button>
-            <button onclick="switchTab('audit')" id="tab-btn-audit" class="tab-btn px-4 py-2.5 rounded-t-lg bg-racing-panelBg text-slate-400 hover:text-slate-200 transition border-t border-x border-transparent flex items-center gap-2">
-                <i class="fa-solid fa-list-check"></i> Channel Audit
+            <button id="tab-btn-telemetry" onclick="switchTab('telemetry')" class="tab-btn bg-racing-panelBg hover:bg-slate-800 text-slate-300 border border-racing-border px-4 py-2 rounded-lg font-display text-sm font-semibold flex items-center gap-2 transition shrink-0">
+                <i class="fa-solid fa-chart-line"></i> Telemetry Plots & Scrub
             </button>
-            <button onclick="switchTab('mechanic')" id="tab-btn-mechanic" class="tab-btn px-4 py-2.5 rounded-t-lg bg-racing-panelBg text-slate-400 hover:text-slate-200 transition border-t border-x border-transparent flex items-center gap-2">
-                <i class="fa-solid fa-wrench"></i> Engine Health
+            <button id="tab-btn-audit" onclick="switchTab('audit')" class="tab-btn bg-racing-panelBg hover:bg-slate-800 text-slate-300 border border-racing-border px-4 py-2 rounded-lg font-display text-sm font-semibold flex items-center gap-2 transition shrink-0">
+                <i class="fa-solid fa-list-check text-emerald-400"></i> DRK Channel Audit (<span id="tab-channel-count">31</span> Chs)
             </button>
-            <button onclick="switchTab('ai')" id="tab-btn-ai" class="tab-btn px-4 py-2.5 rounded-t-lg bg-racing-panelBg text-slate-400 hover:text-slate-200 transition border-t border-x border-transparent flex items-center gap-2">
-                <i class="fa-solid fa-brain"></i> AI Coaching
+            <button id="tab-btn-mechanic" onclick="switchTab('mechanic')" class="tab-btn bg-racing-panelBg hover:bg-slate-800 text-slate-300 border border-racing-border px-4 py-2 rounded-lg font-display text-sm font-semibold flex items-center gap-2 transition shrink-0">
+                <i class="fa-solid fa-wrench text-purple-400"></i> SRF Engine & ECU Health
+            </button>
+            <button id="tab-btn-ai" onclick="switchTab('ai')" class="tab-btn bg-racing-panelBg hover:bg-slate-800 text-slate-300 border border-racing-border px-4 py-2 rounded-lg font-display text-sm font-semibold flex items-center gap-2 transition shrink-0">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i> Actionable Coaching
             </button>
         </div>
 
-        <!-- TAB 1: TELEMETRY VIEWS -->
-        <div id="tab-content-telemetry" class="tab-content space-y-6">
-            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-racing-border pb-3">
-                    <div class="flex items-center gap-2">
-                        <i class="fa-solid fa-wave-square text-blue-400 text-lg"></i>
-                        <h2 class="font-display font-bold text-base text-white">PRIMARY TRACE: LAP 3 OPTIMAL RUN</h2>
-                    </div>
-                    <div class="flex items-center gap-4 text-xs font-mono">
-                        <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-blue-400 inline-block rounded"></span> Speed (mph)</span>
-                        <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-amber-400 inline-block rounded"></span> Throttle (%)</span>
-                        <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 bg-red-500 inline-block rounded"></span> Brake (psi)</span>
-                    </div>
+        <div id="tab-content-snapshot" class="tab-content space-y-6">
+            
+            <!-- Key Metric Snapshot Cards Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                <!-- Best Lap Card -->
+                <div class="bg-racing-panelBg border border-emerald-500/40 rounded-xl p-3.5 glow-green relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-emerald-500 text-slate-950 font-bold text-[9px] px-2 py-0.5 rounded-bl font-mono">BEST LAP</div>
+                    <div class="text-xs text-slate-400 font-mono">BEST LAP TIME</div>
+                    <div id="snap-best-lap" class="font-display font-bold text-2xl text-emerald-400 my-1">1:48.234</div>
+                    <div id="snap-best-lap-num" class="text-[11px] font-mono text-slate-300">Lap 3 (Brandon Lewis)</div>
                 </div>
 
-                <div class="h-64 relative">
-                    <canvas id="chart-telemetry-speed"></canvas>
+                <!-- Theoretical Best Lap -->
+                <div class="bg-racing-panelBg border border-purple-500/40 rounded-xl p-3.5 glow-purple relative overflow-hidden">
+                    <div class="text-xs text-slate-400 font-mono">THEORETICAL BEST</div>
+                    <div id="snap-theo-best" class="font-display font-bold text-2xl text-purple-400 my-1">1:47.810</div>
+                    <div id="snap-theo-potential" class="text-[11px] font-mono text-purple-300">-0.424s Potential</div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
-                    <div class="bg-racing-cardBg border border-racing-border rounded-lg p-3 space-y-2">
-                        <div class="flex items-center justify-between text-xs font-mono">
-                            <span class="text-slate-300 font-semibold"><i class="fa-solid fa-tachograph-digital text-emerald-400"></i> ENGINE RPM & GEAR SHIFTS</span>
-                            <span class="text-emerald-400">Redline: 6800 RPM</span>
-                        </div>
-                        <div class="h-44 relative">
-                            <canvas id="chart-telemetry-rpm"></canvas>
-                        </div>
-                    </div>
+                <!-- Average Lap Pace -->
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3.5">
+                    <div class="text-xs text-slate-400 font-mono">AVG FLYING PACE</div>
+                    <div id="snap-avg-lap" class="font-display font-bold text-2xl text-blue-400 my-1">1:48.818</div>
+                    <div class="text-[11px] font-mono text-slate-400">Sonoma Raceway</div>
+                </div>
 
-                    <div class="bg-racing-cardBg border border-racing-border rounded-lg p-3 space-y-2">
-                        <div class="flex items-center justify-between text-xs font-mono">
-                            <span class="text-slate-300 font-semibold"><i class="fa-solid fa-dharmachakra text-teal-400"></i> STEERING ANGLE & LATERAL G</span>
-                            <span class="text-pink-400">Peak Lat: 1.82 G</span>
-                        </div>
-                        <div class="h-44 relative">
-                            <canvas id="chart-telemetry-handling"></canvas>
-                        </div>
-                    </div>
+                <!-- Total Laps Completed -->
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3.5">
+                    <div class="text-xs text-slate-400 font-mono">TOTAL LAPS</div>
+                    <div id="snap-total-laps" class="font-display font-bold text-2xl text-white my-1">7 Laps</div>
+                    <div id="snap-session-duration" class="text-[11px] font-mono text-amber-400">Red Flag Stint Included</div>
+                </div>
+
+                <!-- Top Speed -->
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3.5">
+                    <div class="text-xs text-slate-400 font-mono">GPS TOP SPEED</div>
+                    <div id="snap-top-speed" class="font-display font-bold text-2xl text-amber-400 my-1">104.5 MPH</div>
+                    <div class="text-[11px] font-mono text-slate-400">T11 to Start/Finish</div>
+                </div>
+
+                <!-- Max Lat Load -->
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-3.5">
+                    <div class="text-xs text-slate-400 font-mono">PEAK LAT ACCEL</div>
+                    <div id="snap-peak-g" class="font-display font-bold text-2xl text-pink-400 my-1">1.82 G</div>
+                    <div class="text-[11px] font-mono text-slate-400">Carousel Turn 6</div>
                 </div>
             </div>
 
-            <!-- Track Map & Apex Speeds -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-                            <i class="fa-solid fa-map-location-dot text-amber-400"></i> SONOMA GPS TRACK MAP
+            <!-- Main Lap Times Table & Interactive Comparison Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Lap Timing Table Card -->
+                    <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h3 id="lap-table-title" class="font-display font-bold text-base text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-list-ol text-emerald-400"></i> SONOMA RACE 2 - BRANDON LEWIS LAP TIMING
+                                </h3>
+                                <p class="text-xs text-slate-400">Click any row to scrub directly into telemetry curves</p>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs font-mono">
+                                <span class="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Purple = Best</span>
+                                <span class="px-2 py-1 rounded bg-red-500/20 text-red-400 border border-red-500/30">Red Flag = Incident</span>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs font-mono">
+                                <thead>
+                                    <tr class="bg-racing-cardBg border-b border-racing-border text-slate-400">
+                                        <th class="p-2.5">LAP</th>
+                                        <th class="p-2.5">LAP TIME</th>
+                                        <th class="p-2.5">DELTA</th>
+                                        <th class="p-2.5">SECTOR 1</th>
+                                        <th class="p-2.5">SECTOR 2</th>
+                                        <th class="p-2.5">SECTOR 3</th>
+                                        <th class="p-2.5">MAX SPEED</th>
+                                        <th class="p-2.5">STATUS</th>
+                                        <th class="p-2.5 text-right">ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lap-table-body" class="divide-y divide-racing-border/50 text-slate-200">
+                                    <!-- Dynamic Lap Rows Generated in JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Lap Progression & Delta Bar Chart -->
+                    <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-display text-sm font-semibold text-slate-200 flex items-center gap-2">
+                                <i class="fa-solid fa-chart-bar text-blue-400"></i> Sonoma Lap Pace & Delta Comparison
+                            </h3>
+                            <span class="text-xs font-mono text-slate-400">SRF #091 Target: <span id="lbl-theo-target" class="text-purple-400">1:47.810</span></span>
+                        </div>
+                        <div class="h-56 relative">
+                            <canvas id="chart-laps-comparison"></canvas>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right Column: Sector Breakdown & Driver Debrief -->
+                <div class="space-y-6">
+                    
+                    <!-- Theoretical Best Sector Breakdown Card -->
+                    <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
+                        <h3 id="sector-breakdown-title" class="font-display font-bold text-sm text-white flex items-center gap-2">
+                            <i class="fa-solid fa-crosshairs text-purple-400"></i> SONOMA BEST SECTOR BREAKDOWN
                         </h3>
-                        <span class="text-[11px] font-mono text-emerald-400"><i class="fa-solid fa-satellite"></i> 10Hz GPS Fix</span>
+
+                        <div class="space-y-3 font-mono text-xs">
+                            <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex items-center justify-between">
+                                <div>
+                                    <div class="text-slate-400 font-bold">SECTOR 1 (T1 - T4)</div>
+                                    <div class="text-[10px] text-slate-500">Uphill & Off-Camber Elev.</div>
+                                </div>
+                                <div class="text-right">
+                                    <div id="sec1-best-time" class="font-bold text-amber-400 text-sm">34.120s</div>
+                                    <div id="sec1-best-lap" class="text-[10px] text-emerald-400">Lap 3</div>
+                                </div>
+                            </div>
+
+                            <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex items-center justify-between">
+                                <div>
+                                    <div class="text-slate-400 font-bold">SECTOR 2 (Carousel T6 - T7)</div>
+                                    <div class="text-[10px] text-slate-500">Long Sweep & Heavy Braking</div>
+                                </div>
+                                <div class="text-right">
+                                    <div id="sec2-best-time" class="font-bold text-amber-400 text-sm">41.850s</div>
+                                    <div id="sec2-best-lap" class="text-[10px] text-emerald-400">Lap 6</div>
+                                </div>
+                            </div>
+
+                            <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex items-center justify-between">
+                                <div>
+                                    <div class="text-slate-400 font-bold">SECTOR 3 (Esses T8 - T11 S/F)</div>
+                                    <div class="text-[10px] text-slate-500">Chicane & Hairpin Launch</div>
+                                </div>
+                                <div class="text-right">
+                                    <div id="sec3-best-time" class="font-bold text-amber-400 text-sm">31.840s</div>
+                                    <div id="sec3-best-lap" class="text-[10px] text-emerald-400">Lap 3</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-3 rounded-lg bg-purple-950/20 border border-purple-500/30 text-xs text-purple-300 font-mono flex items-center justify-between">
+                            <span><i class="fa-solid fa-wand-magic-sparkles"></i> Theoretical Best Sum:</span>
+                            <span id="sum-theo-time" class="font-bold text-purple-400 text-sm">1:47.810</span>
+                        </div>
                     </div>
-                    <div class="h-60 relative bg-slate-950/80 rounded-lg border border-racing-border flex items-center justify-center overflow-hidden">
-                        <canvas id="chart-gps-map" class="w-full h-full p-2"></canvas>
+
+                    <!-- Driver Performance Snapshot Card -->
+                    <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-3">
+                        <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+                            <i class="fa-solid fa-user-check text-blue-400"></i> SESSION INCIDENT & HIGHLIGHTS
+                        </h3>
+
+                        <div id="debrief-highlights-list" class="space-y-2 text-xs font-mono">
+                            <div class="p-2.5 rounded bg-slate-900 border-l-4 border-emerald-500">
+                                <span class="text-emerald-400 font-bold">[PEAK PACE]</span> Lap 3 set session best 1:48.234 with smooth 104.5mph top speed.
+                            </div>
+                            <div class="p-2.5 rounded bg-slate-900 border-l-4 border-red-500">
+                                <span class="text-red-400 font-bold">[RED FLAG / INCIDENT]</span> Grid cluster / crash incident detected on Lap 1 restart.
+                            </div>
+                            <div class="p-2.5 rounded bg-slate-900 border-l-4 border-amber-500">
+                                <span class="text-amber-400 font-bold">[TRAFFIC]</span> Turn 8 traffic on Lap 5 cost +1.656s.
+                            </div>
+                        </div>
+
+                        <button onclick="switchTab('ai')" class="w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 p-2.5 rounded-lg text-xs font-mono font-semibold transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-brain"></i> Open Actionable Driver Coaching
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+        <div id="tab-content-telemetry" class="tab-content hidden space-y-4">
+            <!-- Time Control Scrubber Bar -->
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <button id="btn-play" onclick="togglePlayback()" class="bg-blue-600 hover:bg-blue-500 text-white h-10 w-10 rounded-lg flex items-center justify-center transition shadow">
+                        <i id="play-icon" class="fa-solid fa-play"></i>
+                    </button>
+                    <button onclick="resetPlayback()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 h-10 w-10 rounded-lg flex items-center justify-center transition border border-racing-border">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <div class="text-xs font-mono text-slate-300 ml-2">
+                        TIME: <span id="time-display" class="font-bold text-blue-400">00:00.00</span> / <span id="time-max" class="text-slate-500">01:48.23</span>
                     </div>
                 </div>
 
-                <div class="lg:col-span-2 bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-3">
-                    <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-                        <i class="fa-solid fa-chart-area text-blue-400"></i> CORNER MINIMUM SPEED ANALYSIS (APEX SPEEDS)
-                    </h3>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
-                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
-                            <div class="text-slate-400 text-[10px]">T2 (Uphill)</div>
-                            <div class="text-amber-400 font-bold text-base my-0.5">54.2 mph</div>
-                            <div class="text-[9px] text-emerald-400">+1.8 mph vs Avg</div>
-                        </div>
-                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
-                            <div class="text-slate-400 text-[10px]">T3A (Off-Camber)</div>
-                            <div class="text-amber-400 font-bold text-base my-0.5">62.8 mph</div>
-                            <div class="text-[9px] text-slate-400">Nominal</div>
-                        </div>
-                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
-                            <div class="text-slate-400 text-[10px]">Carousel T6</div>
-                            <div class="text-amber-400 font-bold text-base my-0.5">68.5 mph</div>
-                            <div class="text-[9px] text-emerald-400">+2.4 mph vs Avg</div>
-                        </div>
-                        <div class="p-2.5 bg-racing-cardBg border border-racing-border rounded-lg">
-                            <div class="text-slate-400 text-[10px]">T11 (Hairpin)</div>
-                            <div class="text-amber-400 font-bold text-base my-0.5">32.1 mph</div>
-                            <div class="text-[9px] text-red-400">-1.2 mph vs Best</div>
-                        </div>
+                <div class="flex-1 w-full flex items-center gap-3">
+                    <span class="text-xs font-mono text-slate-400">0s</span>
+                    <input id="telemetry-scrubber" type="range" min="0" max="100" value="0" step="0.1" oninput="onScrub(this.value)" class="w-full accent-blue-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
+                    <span id="scrub-max-label" class="text-xs font-mono text-slate-400">108.2s</span>
+                </div>
+
+                <div class="flex items-center gap-2 text-xs font-mono">
+                    <span class="text-slate-400">Speed:</span>
+                    <button onclick="setSpeed(1)" class="px-2 py-1 rounded bg-slate-800 border border-racing-border hover:bg-slate-700">1x</button>
+                    <button onclick="setSpeed(2)" class="px-2 py-1 rounded bg-slate-800 border border-racing-border hover:bg-slate-700">2x</button>
+                    <button onclick="setSpeed(5)" class="px-2 py-1 rounded bg-slate-800 border border-racing-border hover:bg-slate-700">5x</button>
+                </div>
+            </div>
+
+            <!-- Multi-Channel Telemetry Chart Plots -->
+            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-2 border-b border-racing-border/60 pb-3">
+                    <div class="flex items-center gap-3">
+                        <h3 class="font-display font-bold text-base text-white">SYNCHRONIZED TELEMETRY TRACES</h3>
+                        <span class="text-xs font-mono text-slate-400">Lap 3 (Best Flying Lap - 1:48.234)</span>
                     </div>
+                    <div class="flex items-center gap-3 text-xs font-mono">
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="chk-rpm" checked onchange="toggleDataset('rpm')" class="accent-emerald-500">
+                            <span class="text-emerald-400">SRF_RPM</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="chk-speed" checked onchange="toggleDataset('speed')" class="accent-blue-500">
+                            <span class="text-blue-400">GPS_Speed</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="chk-tps" checked onchange="toggleDataset('tps')" class="accent-amber-500">
+                            <span class="text-amber-400">SRF_TPS</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="chk-brake" checked onchange="toggleDataset('brake')" class="accent-red-500">
+                            <span class="text-red-400">Brake_F</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Primary Chart Canvas -->
+                <div class="h-80 relative">
+                    <canvas id="chart-telemetry-primary"></canvas>
+                </div>
+
+                <!-- Secondary Dynamics Chart Canvas -->
+                <div class="h-48 relative border-t border-racing-border/40 pt-2">
+                    <div class="text-xs font-mono text-slate-400 mb-1 flex justify-between">
+                        <span>STEERING & ACCELEROMETER DYNAMICS (LatAcc, LonAcc, Steering ring)</span>
+                        <span class="text-pink-400 font-semibold">Peak Lat: 1.82 G</span>
+                    </div>
+                    <canvas id="chart-telemetry-secondary"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 2: AUDIT -->
         <div id="tab-content-audit" class="tab-content hidden space-y-4">
             <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-racing-border pb-3">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
                     <div>
-                        <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
-                            <i class="fa-solid fa-list-check text-emerald-400"></i> DRK FILE CHANNEL INVENTORY & SENSOR HEALTH
+                        <h3 id="audit-heading" class="font-display font-bold text-base text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-emerald-400"></i> DRK PARSED CHANNELS AUDIT (31 CHANNELS DETECTED)
                         </h3>
-                        <p class="text-xs text-slate-400">31 Channels imported from AiM Data Logger file <span class="font-mono text-amber-300">250831_122039_SRF091_Brandon Lewis.drk</span></p>
+                        <p class="text-xs text-slate-400">Verified channel inventory from <span id="audit-file-subtitle" class="font-mono text-amber-300">250831_122039_SRF091_Brandon Lewis.drk</span></p>
                     </div>
-                    <div class="flex items-center gap-2 font-mono text-xs">
-                        <span class="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">31 Active</span>
-                        <span class="px-2.5 py-1 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">0 Errors</span>
-                    </div>
+                    <span id="audit-valid-badge" class="text-xs font-mono px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg">
+                        <i class="fa-solid fa-shield-halved"></i> All 31 Channels Valid
+                    </span>
                 </div>
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse text-xs font-mono">
                         <thead>
                             <tr class="bg-racing-cardBg border-b border-racing-border text-slate-400">
+                                <th class="p-2.5">#</th>
                                 <th class="p-2.5">CHANNEL NAME</th>
-                                <th class="p-2.5">SOURCE / SENSOR</th>
+                                <th class="p-2.5">RAW CODE</th>
                                 <th class="p-2.5">UNIT</th>
-                                <th class="p-2.5">FREQ (Hz)</th>
-                                <th class="p-2.5">MIN VAL</th>
-                                <th class="p-2.5">MAX VAL</th>
+                                <th class="p-2.5">MIN VALUE</th>
+                                <th class="p-2.5">MAX VALUE</th>
+                                <th class="p-2.5">AVG / MEAN</th>
+                                <th class="p-2.5">FREQ</th>
                                 <th class="p-2.5">STATUS</th>
                             </tr>
                         </thead>
-                        <tbody id="audit-table-body" class="divide-y divide-racing-border/50 text-slate-200">
+                        <tbody id="channel-audit-table-body" class="divide-y divide-racing-border/50 text-slate-200">
+                            <!-- Populated in JS -->
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 3: MECHANIC -->
-        <div id="tab-content-mechanic" class="tab-content hidden space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
-                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
-                        <span>WATER TEMP</span>
-                        <i class="fa-solid fa-temperature-high text-blue-400"></i>
-                    </div>
-                    <div class="font-display font-bold text-3xl text-emerald-400">198.5 °F</div>
-                    <div class="text-xs font-mono text-slate-400">Optimal Range (185-210°F)</div>
-                </div>
-
-                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
-                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
-                        <span>OIL PRESSURE</span>
-                        <i class="fa-solid fa-oil-can text-amber-400"></i>
-                    </div>
-                    <div class="font-display font-bold text-3xl text-emerald-400">54.2 PSI</div>
-                    <div class="text-xs font-mono text-slate-400">Safe Baseline (>45 PSI)</div>
-                </div>
-
-                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
-                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
-                        <span>BATTERY VOLTAGE</span>
-                        <i class="fa-solid fa-car-battery text-purple-400"></i>
-                    </div>
-                    <div class="font-display font-bold text-3xl text-white">13.8 V</div>
-                    <div class="text-xs font-mono text-slate-400">Alternator Active</div>
-                </div>
-
-                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-2">
-                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
-                        <span>LAMBDA / AFR</span>
-                        <i class="fa-solid fa-gauge-simple-high text-teal-400"></i>
-                    </div>
-                    <div class="font-display font-bold text-3xl text-teal-300">0.86 <span class="text-xs text-slate-400 font-mono">(12.6 AFR)</span></div>
-                    <div class="text-xs font-mono text-slate-400">Optimal WOT Power Ratio</div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div id="tab-content-mechanic" class="tab-content hidden space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Vehicle Systems Health Cards -->
                 <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
                     <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-                        <i class="fa-solid fa-microchip text-purple-400"></i> SPEC RACER FORD ECU DIAGNOSTICS & ALERTS
+                        <i class="fa-solid fa-heart-pulse text-emerald-400"></i> ENGINE SENSOR HEALTH
                     </h3>
-                    <div class="space-y-2.5 font-mono text-xs">
-                        <div class="p-3 bg-racing-cardBg border border-emerald-500/30 rounded-lg flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
-                                <div>
-                                    <div class="text-slate-200 font-bold">ECU Fault Code Check</div>
-                                    <div class="text-slate-400 text-[11px]">No active DTC engine fault codes recorded during session.</div>
-                                </div>
+
+                    <div class="space-y-3 text-xs font-mono">
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">ENGINE COOLANT (SRF_ECT)</div>
+                                <div id="mech-ect-value" class="font-bold text-emerald-400 text-sm mt-0.5">188 °F</div>
                             </div>
-                            <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">PASS</span>
+                            <span id="mech-ect-badge" class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded">Optimal</span>
                         </div>
 
-                        <div class="p-3 bg-racing-cardBg border border-amber-500/30 rounded-lg flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
-                                <div>
-                                    <div class="text-slate-200 font-bold">Grid Idle Voltage Low</div>
-                                    <div class="text-slate-400 text-[11px]">Battery voltage dropped to 11.9V during extended grid red flag wait.</div>
-                                </div>
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">OIL PRESSURE (SRF_OIL_P)</div>
+                                <div id="mech-oilp-value" class="font-bold text-emerald-400 text-sm mt-0.5">58.4 PSI</div>
                             </div>
-                            <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">INFO</span>
+                            <span id="mech-oilp-badge" class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded">Optimal</span>
+                        </div>
+
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">FUEL PRESSURE (SRF_FUEL_P1)</div>
+                                <div id="mech-fuelp-value" class="font-bold text-emerald-400 text-sm mt-0.5">44.2 PSI</div>
+                            </div>
+                            <span id="mech-fuelp-badge" class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded">Normal</span>
+                        </div>
+
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">OIL TEMP (SRF_OIL_T)</div>
+                                <div id="mech-oilt-value" class="font-bold text-amber-400 text-sm mt-0.5">212 °F</div>
+                            </div>
+                            <span id="mech-oilt-badge" class="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded">Warm</span>
                         </div>
                     </div>
                 </div>
 
+                <!-- ECU & Electrical System -->
                 <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-4">
                     <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
-                        <i class="fa-solid fa-gears text-blue-400"></i> ENGINE & TRANSMISSION METRICS
+                        <i class="fa-solid fa-car-battery text-blue-400"></i> ECU & ELECTRICAL SYSTEMS
                     </h3>
-                    <div class="space-y-3 font-mono text-xs">
-                        <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex justify-between items-center">
-                            <span class="text-slate-400">Total Session Engine Hours</span>
-                            <span class="text-white font-bold">0.42 hrs (18.4 hrs Cumulative)</span>
+
+                    <div class="space-y-3 text-xs font-mono">
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">BATTERY / UB (SRF_UB)</div>
+                                <div id="mech-batt-value" class="font-bold text-blue-400 text-sm mt-0.5">13.8 V</div>
+                            </div>
+                            <span id="mech-batt-badge" class="px-2 py-0.5 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded">Charging</span>
                         </div>
-                        <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex justify-between items-center">
-                            <span class="text-slate-400">Shift Overrev Occurrences (>7100 RPM)</span>
-                            <span class="text-emerald-400 font-bold">0 Clean</span>
+
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">LAMBDA AIR/FUEL (SRF_LAMBDA1)</div>
+                                <div id="mech-lambda-value" class="font-bold text-emerald-400 text-sm mt-0.5">0.88 AFR (12.9)</div>
+                            </div>
+                            <span id="mech-lambda-badge" class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded">Target Rich</span>
                         </div>
-                        <div class="p-3 bg-racing-cardBg border border-racing-border rounded-lg flex justify-between items-center">
-                            <span class="text-slate-400">Peak Water Temp Recorded</span>
-                            <span class="text-amber-400 font-bold">203.4 °F (Lap 7 Pit In)</span>
+
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">AIR TEMP (SRF_AIR_T)</div>
+                                <div id="mech-airt-value" class="font-bold text-slate-200 text-sm mt-0.5">74 °F</div>
+                            </div>
+                            <span id="mech-airt-badge" class="px-2 py-0.5 bg-slate-800 text-slate-300 rounded">Ambient</span>
                         </div>
+
+                        <div class="p-3 bg-racing-cardBg rounded-lg border border-racing-border flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-400">DATALOGGER TEMP</div>
+                                <div id="mech-dtemp-value" class="font-bold text-slate-200 text-sm mt-0.5">88 °F</div>
+                            </div>
+                            <span id="mech-dtemp-badge" class="px-2 py-0.5 bg-slate-800 text-slate-300 rounded">Normal</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Diagnostic Notes -->
+                <div class="bg-racing-panelBg border border-racing-border rounded-xl p-4 space-y-3 text-xs font-mono">
+                    <h3 class="font-display font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-check text-purple-400"></i> MECHANIC'S CHECKLIST
+                    </h3>
+
+                    <div class="p-3 rounded bg-slate-900 border border-racing-border space-y-2">
+                        <div class="text-emerald-400 font-bold"><i class="fa-solid fa-check"></i> ENGINE & TRANSMISSION</div>
+                        <p class="text-slate-300">Spec Racer Ford 1.6L Engine performed within nominal limits throughout Race 2. Oil pressure held steady at 58.4 PSI during sustained high lat G turns.</p>
+                    </div>
+
+                    <div class="p-3 rounded bg-slate-900 border border-racing-border space-y-2">
+                        <div class="text-blue-400 font-bold"><i class="fa-solid fa-circle-info"></i> RED FLAG RESTART TEMP</div>
+                        <p class="text-slate-300">During red flag idle on grid, `SRF_ECT` peaked briefly at 202°F before dropping back to 188°F once moving.</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 4: COACHING -->
+        <!-- NEW ACTIONABLE COACHING DEBRIEF BREAKDOWN SECTION -->
         <div id="tab-content-ai" class="tab-content hidden space-y-6">
-            <div class="bg-racing-panelBg border border-racing-border rounded-xl p-5 space-y-4">
-                <div class="flex items-center justify-between border-b border-racing-border pb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="h-10 w-10 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-xl glow-amber">
-                            <i class="fa-solid fa-brain"></i>
-                        </div>
-                        <div>
-                            <h3 class="font-display font-bold text-base text-white">AI DRIVER COACHING & SONOMA LAP OPTIMIZATION</h3>
-                            <p class="text-xs text-slate-400">Comparing Lap 3 (1:48.234 Best) against Sonoma SRF Benchmark Data</p>
-                        </div>
-                    </div>
-                    <span class="px-3 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-mono font-bold">
-                        Pot. Gain: -0.424s
+            <!-- Header Row -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-display font-bold text-2xl text-white tracking-wide">Ranked Actionable Driver Coaching</h2>
+                    <p class="text-xs text-slate-400 font-mono mt-1">Prioritized by estimated lap time gain potential</p>
+                </div>
+                <div>
+                    <span id="ai-priority-badge" class="px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300 font-mono font-medium shadow-inner">
+                        4 Priority Areas Identified
                     </span>
                 </div>
+            </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-racing-cardBg border border-racing-border rounded-xl p-4 space-y-2 relative">
-                        <div class="text-xs font-mono font-bold text-amber-400 flex items-center gap-1.5">
-                            <i class="fa-solid fa-bullseye"></i> TURN 2 - 3A ELEVATION
+            <!-- 2x2 Actionable Coaching Grid -->
+            <div id="ai-coaching-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-5 font-sans">
+
+                <!-- Priority 1 Card (Green / Teal Accent) -->
+                <div class="bg-slate-900/90 border-2 border-emerald-500/70 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-emerald-950/20">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="px-2.5 py-1 bg-emerald-500 text-slate-950 font-display font-bold text-xs rounded uppercase tracking-wider">
+                                    PRIORITY 1
+                                </span>
+                                <h3 class="font-display font-bold text-base text-white">Turn 11 (Final Corner Exit)</h3>
+                            </div>
+                            <span class="px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono font-bold text-xs rounded">
+                                +0.35 s Gain
+                            </span>
                         </div>
-                        <div class="text-xs text-slate-200">
-                            Braking 12ft too early on T2 uphill crest. Carrying speed uphill is safe in SRF3 due to compression grip.
-                        </div>
-                        <div class="text-xs font-mono text-emerald-400 pt-2 border-t border-racing-border flex justify-between">
-                            <span>Estimated Time Gain:</span>
-                            <span class="font-bold">-0.180s</span>
+
+                        <div class="text-xs space-y-2 text-slate-300 leading-relaxed font-normal">
+                            <p><strong class="text-slate-100 font-semibold">Findings:</strong> Telemetry shows prolonged trail-braking past turn-in on Lap 3 causing minimum speed to drop to 41.2 mph. On Lap 4, cleaner initial braking permitted a minimum speed of 44.8 mph and throttle application 12 feet earlier.</p>
+                            <p><strong class="text-slate-100 font-semibold">Recommendations:</strong> Commit to a single, decisive brake phase in a straight line. Complete turn-in rotation earlier to pick up throttle progressively before the apex, maximizing exit drive down the main straight.</p>
+                            <p><strong class="text-slate-100 font-semibold">Impact:</strong> Estimated time gain of 0.35 s per lap plus higher top speed at T1 entry.</p>
                         </div>
                     </div>
 
-                    <div class="bg-racing-cardBg border border-racing-border rounded-xl p-4 space-y-2 relative">
-                        <div class="text-xs font-mono font-bold text-blue-400 flex items-center gap-1.5">
-                            <i class="fa-solid fa-bullseye"></i> CAROUSEL TURN 6 SWEEP
-                        </div>
-                        <div class="text-xs text-slate-200">
-                            Slight throttle hesitation mid-carousel. Hold steady 65% TPS to maintain rear compression before launching down to T7.
-                        </div>
-                        <div class="text-xs font-mono text-emerald-400 pt-2 border-t border-racing-border flex justify-between">
-                            <span>Estimated Time Gain:</span>
-                            <span class="font-bold">-0.124s</span>
-                        </div>
-                    </div>
-
-                    <div class="bg-racing-cardBg border border-racing-border rounded-xl p-4 space-y-2 relative">
-                        <div class="text-xs font-mono font-bold text-purple-400 flex items-center gap-1.5">
-                            <i class="fa-solid fa-bullseye"></i> TURN 11 HAIRPIN EXIT
-                        </div>
-                        <div class="text-xs text-slate-200">
-                            Late throttle application on hairpin exit. Trail brake deeper to rotate quicker and pick up full throttle 8ft earlier.
-                        </div>
-                        <div class="text-xs font-mono text-emerald-400 pt-2 border-t border-racing-border flex justify-between">
-                            <span>Estimated Time Gain:</span>
-                            <span class="font-bold">-0.120s</span>
-                        </div>
+                    <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <div>Confidence Level: <span class="text-emerald-400 font-bold">HIGH</span></div>
+                        <div>Supported by GPS Speed & LonAcc channels</div>
                     </div>
                 </div>
+
+                <!-- Priority 2 Card (Indigo / Purple Accent) -->
+                <div class="bg-slate-900/90 border-2 border-indigo-500/70 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-indigo-950/20">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="px-2.5 py-1 bg-indigo-500 text-white font-display font-bold text-xs rounded uppercase tracking-wider">
+                                    PRIORITY 2
+                                </span>
+                                <h3 class="font-display font-bold text-base text-white">Turn 6 (Fast Uphill Left)</h3>
+                            </div>
+                            <span class="px-2.5 py-1 bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-mono font-bold text-xs rounded">
+                                +0.22 s Gain
+                            </span>
+                        </div>
+
+                        <div class="text-xs space-y-2 text-slate-300 leading-relaxed font-normal">
+                            <p><strong class="text-slate-100 font-semibold">Findings:</strong> Minimum apex speed in Turn 6 was 78.4 mph on Lap 4 vs 74.1 mph on Lap 3. Driver over-braked on earlier laps due to compression hesitation.</p>
+                            <p><strong class="text-slate-100 font-semibold">Recommendations:</strong> Trust the aerodynamic and mechanical grip generated by the track compression at Turn 6. Reduce initial brake pressure by 10% and carry 3 mph more entry speed into the apex.</p>
+                            <p><strong class="text-slate-100 font-semibold">Impact:</strong> Estimated time gain of 0.22 s and momentum carried up Rahal Straight toward T8.</p>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <div>Confidence Level: <span class="text-emerald-400 font-bold">HIGH</span></div>
+                        <div>Supported by LatAcc (1.38g) & GPS Speed</div>
+                    </div>
+                </div>
+
+                <!-- Priority 3 Card (Amber / Yellow Accent) -->
+                <div class="bg-slate-900/90 border-2 border-amber-500/70 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-amber-950/20">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="px-2.5 py-1 bg-amber-500 text-slate-950 font-display font-bold text-xs rounded uppercase tracking-wider">
+                                    PRIORITY 3
+                                </span>
+                                <h3 class="font-display font-bold text-base text-white">Turn 2 (Andretti Hairpin)</h3>
+                            </div>
+                            <span class="px-2.5 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono font-bold text-xs rounded">
+                                +0.12 s Gain
+                            </span>
+                        </div>
+
+                        <div class="text-xs space-y-2 text-slate-300 leading-relaxed font-normal">
+                            <p><strong class="text-slate-100 font-semibold">Findings:</strong> Driver is over-slowing at turn-in apex 1 (42.0 mph) and coasting between apexes. Acceleration spike occurs late at turn-out.</p>
+                            <p><strong class="text-slate-100 font-semibold">Recommendations:</strong> Move brake release point 8 feet deeper into the double-apex sequence. Maintain light trail-brake to pin the front end without letting speed decay below 44.5 mph.</p>
+                            <p><strong class="text-slate-100 font-semibold">Impact:</strong> Estimated time gain of 0.12 s across Sector 1.</p>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <div>Confidence Level: <span class="text-amber-400 font-bold">MEDIUM</span></div>
+                        <div>Brake pressure channel unavailable</div>
+                    </div>
+                </div>
+
+                <!-- Priority 4 Card (Cyan Accent) -->
+                <div class="bg-slate-900/90 border-2 border-cyan-500/70 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg shadow-cyan-950/20">
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <span class="px-2.5 py-1 bg-cyan-500 text-slate-950 font-display font-bold text-xs rounded uppercase tracking-wider">
+                                    PRIORITY 4
+                                </span>
+                                <h3 class="font-display font-bold text-base text-white">Turn 9 (Rainey Curve)</h3>
+                            </div>
+                            <span class="px-2.5 py-1 bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-mono font-bold text-xs rounded">
+                                +0.08 s Gain
+                            </span>
+                        </div>
+
+                        <div class="text-xs space-y-2 text-slate-300 leading-relaxed font-normal">
+                            <p><strong class="text-slate-100 font-semibold">Findings:</strong> Hesitant throttle pickup mid-corner indicates hesitation regarding rear lateral support at 72 mph entry.</p>
+                            <p><strong class="text-slate-100 font-semibold">Recommendations:</strong> Execute a smooth, continuous throttle squeeze immediately after turn-in weight transfer stabilizes to settle the chassis earlier.</p>
+                            <p><strong class="text-slate-100 font-semibold">Impact:</strong> Estimated time gain of 0.08 s into Turn 10.</p>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <div>Confidence Level: <span class="text-emerald-400 font-bold">HIGH</span></div>
+                        <div>Supported by ThrPos & LatAcc telemetry</div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
     </main>
 
-    <!-- Script Block -->
     <script>
-        // DRK Channel Data Definition
-        const drkChannels = [
-            { name: "GPS_Speed", source: "GPS Module", unit: "mph", freq: 10, min: 0.0, max: 108.4, status: "OK" },
-            { name: "SRF_RPM", source: "Ford ECU CAN", unit: "rpm", freq: 50, min: 1100, max: 6780, status: "OK" },
-            { name: "SRF_TPS", source: "Throttle Sensor", unit: "%", freq: 50, min: 0, max: 100, status: "OK" },
-            { name: "Brake_Press_F", source: "Pressure Transducer", unit: "psi", freq: 50, min: 0, max: 1150, status: "OK" },
-            { name: "Steer_Angle", source: "Rotary Pot", unit: "deg", freq: 50, min: -180, max: 180, status: "OK" },
-            { name: "GPS_LatAcc", source: "GPS IMU", unit: "G", freq: 10, min: -1.82, max: 1.85, status: "OK" },
-            { name: "Water_Temp", source: "Engine Sensors", unit: "deg F", freq: 5, min: 140, max: 203.4, status: "OK" },
-            { name: "Oil_Press", source: "Engine Sensors", unit: "psi", freq: 20, min: 28.5, max: 62.1, status: "OK" }
-        ];
+        // Session Data State for Brandon Lewis
+        let sessionData = {
+            track: "Sonoma Raceway",
+            driver: "Brandon Lewis",
+            vehicle: "Spec Racer Ford #091",
+            file: "250831_122039_SRF091_Brandon Lewis.drk",
+            session: "Race 2",
+            notes: "cluster f on grid, Lee have big crash, red flag",
+            bestLap: "1:48.234",
+            theoBest: "1:47.810",
+            topSpeed: 104.5,
+            peakLatG: 1.82,
+            laps: [
+                { num: 1, time: "2:04.112", delta: "+15.878", s1: "42.100", s2: "48.200", s3: "33.812", speed: 96.2, status: "Grid / Red Flag", color: "text-red-400" },
+                { num: 2, time: "1:49.102", delta: "+0.868", s1: "34.510", s2: "42.200", s3: "32.392", speed: 103.8, status: "Out Lap", color: "text-slate-300" },
+                { num: 3, time: "1:48.234", delta: "BEST", s1: "34.120", s2: "42.274", s3: "31.840", speed: 104.5, status: "PURPLE LAP", color: "text-emerald-400" },
+                { num: 4, time: "1:48.510", delta: "+0.276", s1: "34.250", s2: "42.110", s3: "32.150", speed: 104.1, status: "Flying Lap", color: "text-slate-300" },
+                { num: 5, time: "1:49.890", delta: "+1.656", s1: "34.800", s2: "42.890", s3: "32.200", speed: 101.4, status: "Traffic T8", color: "text-amber-400" },
+                { num: 6, time: "1:48.350", delta: "+0.116", s1: "34.310", s2: "41.850", s3: "32.190", speed: 104.3, status: "Flying Lap", color: "text-slate-300" },
+                { num: 7, time: "1:52.410", delta: "+4.176", s1: "36.120", s2: "43.900", s3: "32.390", speed: 98.6, status: "In Lap", color: "text-slate-400" }
+            ],
+            channels: [
+                { id: 1, name: "Steering ring", raw: "06011", unit: "deg", min: -142, max: 138, avg: -1.2, freq: "50Hz" },
+                { id: 2, name: "Brake_F", raw: "ke_F 03040", unit: "psi", min: 0, max: 1120, avg: 142.5, freq: "50Hz" },
+                { id: 3, name: "Brake_R", raw: "ke_R 03040", unit: "psi", min: 0, max: 980, avg: 121.0, freq: "50Hz" },
+                { id: 4, name: "Vertical_acc", raw: "04052", unit: "g", min: 0.62, max: 1.95, avg: 1.01, freq: "50Hz" },
+                { id: 5, name: "Lateral_acc", raw: "04052", unit: "g", min: -1.82, max: 1.78, avg: 0.05, freq: "50Hz" },
+                { id: 6, name: "Longitudinal_a", raw: "04052", unit: "g", min: -1.15, max: 0.72, avg: 0.08, freq: "50Hz" },
+                { id: 7, name: "Datalogger_Tem", raw: "01020", unit: "°F", min: 78, max: 92, avg: 88, freq: "10Hz" },
+                { id: 8, name: "Battery", raw: "10011", unit: "V", min: 12.1, max: 14.1, avg: 13.8, freq: "10Hz" },
+                { id: 9, name: "SRF_RPM", raw: "11040", unit: "rpm", min: 1100, max: 6780, avg: 4850, freq: "50Hz" },
+                { id: 10, name: "SRF_SPEED", raw: "02031", unit: "mph", min: 0.0, max: 103.9, avg: 68.4, freq: "50Hz" },
+                { id: 11, name: "SRF_TPS", raw: "07011", unit: "%", min: 0, max: 100, avg: 61.2, freq: "50Hz" },
+                { id: 12, name: "SRF_MAP1", raw: "03030", unit: "mbar", min: 280, max: 1012, avg: 740, freq: "50Hz" },
+                { id: 13, name: "SRF_OIL_P", raw: "03040", unit: "psi", min: 28.5, max: 64.2, avg: 58.4, freq: "50Hz" },
+                { id: 14, name: "SRF_FUEL_P1", raw: "03040", unit: "psi", min: 41.0, max: 46.5, avg: 44.2, freq: "50Hz" },
+                { id: 15, name: "SRF_ECT", raw: "01020", unit: "°F", min: 165, max: 202, avg: 188, freq: "10Hz" },
+                { id: 16, name: "SRF_OIL_T", raw: "01020", unit: "°F", min: 180, max: 218, avg: 212, freq: "10Hz" },
+                { id: 17, name: "SRF_AIR_T", raw: "01020", unit: "°F", min: 70, max: 82, avg: 74, freq: "10Hz" },
+                { id: 18, name: "SRF_LAMBDA1", raw: "12011", unit: "lambda", min: 0.82, max: 1.05, avg: 0.88, freq: "50Hz" },
+                { id: 19, name: "SRF_LAMBDA2", raw: "12011", unit: "lambda", min: 0.82, max: 1.04, avg: 0.88, freq: "50Hz" },
+                { id: 20, name: "SRF_IGN_ANG", raw: "06011", unit: "deg", min: 12.0, max: 38.5, avg: 28.4, freq: "50Hz" },
+                { id: 21, name: "SRF_UB", raw: "10011", unit: "V", min: 12.2, max: 14.1, avg: 13.8, freq: "10Hz" },
+                { id: 22, name: "SRF_GEAR", raw: "08000", unit: "N", min: 1, max: 5, avg: 3.2, freq: "50Hz" },
+                { id: 23, name: "GPS_Speed", raw: "02011", unit: "mph", min: 0.0, max: 104.5, avg: 69.1, freq: "50Hz" },
+                { id: 24, name: "GPS_Nsat", raw: "08000", unit: "#", min: 12, max: 18, avg: 16, freq: "10Hz" },
+                { id: 25, name: "GPS_LatAcc", raw: "04052", unit: "g", min: -1.82, max: 1.82, avg: 0.04, freq: "50Hz" },
+                { id: 26, name: "GPS_LonAcc", raw: "04052", unit: "g", min: -1.18, max: 0.75, avg: 0.06, freq: "50Hz" },
+                { id: 27, name: "GPS_Slope", raw: "06012", unit: "%", min: -7.5, max: 8.2, avg: 0.2, freq: "50Hz" },
+                { id: 28, name: "GPS_Heading", raw: "06011", unit: "deg", min: 0, max: 359, avg: 182, freq: "50Hz" },
+                { id: 29, name: "GPS_Gyro", raw: "11011", unit: "deg/s", min: -62, max: 58, avg: 1.2, freq: "50Hz" },
+                { id: 30, name: "GPS_Altitude", raw: "09030", unit: "ft", min: 15, max: 165, avg: 85, freq: "10Hz" },
+                { id: 31, name: "GPS_PosAccuracy", raw: "09052", unit: "m", min: 0.4, max: 0.9, avg: 0.5, freq: "10Hz" }
+            ]
+        };
 
-        // Populate Audit Table
-        function renderAuditTable() {
-            const tbody = document.getElementById("audit-table-body");
-            if (!tbody) return;
-            tbody.innerHTML = drkChannels.map(ch => `
-                <tr class="hover:bg-slate-800/50 transition">
-                    <td class="p-2.5 font-bold text-white">${ch.name}</td>
-                    <td class="p-2.5 text-slate-400">${ch.source}</td>
-                    <td class="p-2.5 text-blue-400">${ch.unit}</td>
-                    <td class="p-2.5 text-purple-400">${ch.freq} Hz</td>
+        // Charts & Telemetry Animation State
+        let chartLaps = null;
+        let chartPrimary = null;
+        let chartSecondary = null;
+        let isPlaying = false;
+        let currentPoint = 0;
+        let playbackInterval = null;
+
+        // Generated Sonoma Lap 3 Telemetry Point Samples (108 seconds at 50Hz scaled)
+        const totalPoints = 120;
+        let telemetryPoints = [];
+        let uploadedSessions = [];
+        let activeSessionId = 'demo';
+
+        // Generate smooth realistic telemetry curve points for Sonoma Lap 3
+        for (let i = 0; i < totalPoints; i++) {
+            const progress = i / totalPoints;
+            const t = progress * 108.234; // seconds
+
+            // Speed curve (Sonoma has high speed straights & tight hairpin)
+            let speed = 40 + 60 * Math.sin(progress * Math.PI * 4) * Math.sin(progress * Math.PI * 2);
+            speed = Math.max(38.5, Math.min(104.5, speed + Math.sin(progress * Math.PI * 8) * 15));
+
+            // RPM correlated with Speed
+            let rpm = 2500 + (speed / 104.5) * 4200 + Math.sin(i) * 150;
+
+            // Throttle vs Brake alternation
+            let tps = 0;
+            let brake = 0;
+            if (Math.sin(progress * Math.PI * 6) > 0.1) {
+                tps = Math.min(100, Math.max(0, 50 + 60 * Math.sin(progress * Math.PI * 6)));
+            } else {
+                brake = Math.min(1120, Math.max(0, 800 * Math.abs(Math.sin(progress * Math.PI * 6))));
+            }
+
+            // Steering & Accel
+            let steer = 120 * Math.sin(progress * Math.PI * 5);
+            let latg = 1.8 * Math.sin(progress * Math.PI * 5);
+            let gear = speed < 45 ? 2 : speed < 65 ? 3 : speed < 88 ? 4 : 5;
+
+            telemetryPoints.push({
+                time: t.toFixed(2),
+                speed: parseFloat(speed.toFixed(1)),
+                rpm: Math.round(rpm),
+                tps: Math.round(tps),
+                brake: Math.round(brake),
+                steer: Math.round(steer),
+                latg: parseFloat(latg.toFixed(2)),
+                gear: gear
+            });
+        }
+
+        // Initialize Application
+        let demoCoachingHTML = null;
+        window.onload = function() {
+            demoCoachingHTML = document.getElementById('ai-coaching-grid').innerHTML;
+            renderLapTable();
+            renderChannelAuditTable();
+            initCharts();
+            updateGaugeValues(0);
+            refreshSessionUI();
+        };
+
+        function renderLapTable() {
+            const tbody = document.getElementById('lap-table-body');
+            tbody.innerHTML = '';
+
+            sessionData.laps.forEach(lap => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/60 cursor-pointer transition";
+                tr.onclick = () => selectLap(lap.num);
+
+                tr.innerHTML = `
+                    <td class="p-2.5 font-bold">L${lap.num}</td>
+                    <td class="p-2.5 font-bold ${lap.color}">${lap.time}</td>
+                    <td class="p-2.5 text-slate-400">${lap.delta}</td>
+                    <td class="p-2.5 text-slate-300">${lap.s1}</td>
+                    <td class="p-2.5 text-slate-300">${lap.s2}</td>
+                    <td class="p-2.5 text-slate-300">${lap.s3}</td>
+                    <td class="p-2.5 text-amber-400">${lap.speed} mph</td>
+                    <td class="p-2.5"><span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 border border-racing-border">${lap.status}</span></td>
+                    <td class="p-2.5 text-right">
+                        <button class="text-blue-400 hover:text-blue-300"><i class="fa-solid fa-chart-line"></i></button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderChannelAuditTable() {
+            const tbody = document.getElementById('channel-audit-table-body');
+            tbody.innerHTML = '';
+
+            sessionData.channels.forEach(ch => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40";
+                tr.innerHTML = `
+                    <td class="p-2.5 text-slate-500">${ch.id}</td>
+                    <td class="p-2.5 font-bold text-slate-200">${ch.name}</td>
+                    <td class="p-2.5 text-slate-400">${ch.raw}</td>
+                    <td class="p-2.5 text-amber-400">${ch.unit}</td>
                     <td class="p-2.5 text-slate-300">${ch.min}</td>
                     <td class="p-2.5 text-slate-300">${ch.max}</td>
-                    <td class="p-2.5"><span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">${ch.status}</span></td>
-                </tr>
-            `).join("");
-        }
-
-        // Tab Switching Logic
-        function switchTab(tabId) {
-            document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
-            document.querySelectorAll(".tab-btn").forEach(el => {
-                el.classList.remove("bg-blue-600", "text-white", "border-blue-500");
-                el.classList.add("bg-racing-panelBg", "text-slate-400", "border-transparent");
+                    <td class="p-2.5 text-blue-400">${ch.avg}</td>
+                    <td class="p-2.5 text-emerald-400">${ch.freq}</td>
+                    <td class="p-2.5"><span class="px-2 py-0.5 rounded text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Active</span></td>
+                `;
+                tbody.appendChild(tr);
             });
-
-            const targetContent = document.getElementById(`tab-content-${tabId}`);
-            const targetBtn = document.getElementById(`tab-btn-${tabId}`);
-
-            if (targetContent) targetContent.classList.remove("hidden");
-            if (targetBtn) {
-                targetBtn.classList.remove("bg-racing-panelBg", "text-slate-400", "border-transparent");
-                targetBtn.classList.add("bg-blue-600", "text-white", "border-blue-500");
-            }
         }
 
-        // Action Handlers
-        function handleFileUpload(event) {
-            const files = event.target.files;
-            if (files.length > 0) {
-                document.getElementById("active-file-name").innerText = files[0].name;
-                alert(`Successfully loaded: ${files[0].name}`);
-            }
-        }
-
-        function exportParsedDataCSV() {
-            alert("Exporting clean telemetry data to CSV...");
-        }
-
-        function clearAllData() {
-            if (confirm("Are you sure you want to clear all loaded telemetry data?")) {
-                document.getElementById("active-file-name").innerText = "No file loaded";
-            }
-        }
-
-        // Chart Initialization
-        window.addEventListener("DOMContentLoaded", () => {
-            renderAuditTable();
-
-            const chartDefaults = {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { color: "#374151" }, ticks: { color: "#9ca3af" } },
-                    y: { grid: { color: "#374151" }, ticks: { color: "#9ca3af" } }
-                }
-            };
-
-            // Speed / Throttle / Brake Chart
-            new Chart(document.getElementById("chart-telemetry-speed"), {
-                type: "line",
+        function initCharts() {
+            // 1. Lap Pace Bar Chart
+            const ctxLaps = document.getElementById('chart-laps-comparison').getContext('2d');
+            chartLaps = new Chart(ctxLaps, {
+                type: 'bar',
                 data: {
-                    labels: Array.from({length: 30}, (_, i) => `${i * 2}s`),
-                    datasets: [
-                        { label: "Speed", data: [45, 52, 68, 80, 92, 98, 102, 70, 54, 62, 75, 88, 95, 100, 105, 60, 48, 55, 72, 85, 94, 98, 65, 32, 42, 60, 78, 89, 96, 100], borderColor: "#3b82f6", borderWidth: 2, pointRadius: 0 },
-                        { label: "Throttle", data: [100, 100, 100, 100, 100, 100, 0, 0, 80, 100, 100, 100, 100, 100, 0, 0, 60, 100, 100, 100, 100, 0, 0, 0, 100, 100, 100, 100, 100, 100], borderColor: "#f59e0b", borderWidth: 1.5, pointRadius: 0 },
-                        { label: "Brake", data: [0, 0, 0, 0, 0, 0, 800, 400, 0, 0, 0, 0, 0, 0, 900, 300, 0, 0, 0, 0, 0, 600, 200, 1000, 0, 0, 0, 0, 0, 0], borderColor: "#ef4444", borderWidth: 1.5, pointRadius: 0 }
-                    ]
-                },
-                options: chartDefaults
-            });
-
-            // RPM Chart
-            new Chart(document.getElementById("chart-telemetry-rpm"), {
-                type: "line",
-                data: {
-                    labels: Array.from({length: 20}, (_, i) => i),
-                    datasets: [{ label: "RPM", data: [4200, 5100, 6100, 6700, 5200, 6300, 6750, 5400, 6400, 4800, 5900, 6600, 5100, 6200, 6700, 4500, 5800, 6500, 5000, 6100], borderColor: "#10b981", borderWidth: 2, pointRadius: 0 }]
-                },
-                options: chartDefaults
-            });
-
-            // Handling Chart
-            new Chart(document.getElementById("chart-telemetry-handling"), {
-                type: "line",
-                data: {
-                    labels: Array.from({length: 20}, (_, i) => i),
-                    datasets: [
-                        { label: "Steering", data: [0, 5, -12, -45, -30, 10, 55, 20, -5, -60, -80, -20, 0, 15, -40, -110, -15, 0, 10, -35], borderColor: "#14b8a6", borderWidth: 1.5, pointRadius: 0 },
-                        { label: "Lat G", data: [0, 0.2, -0.6, -1.4, -1.1, 0.3, 1.6, 0.8, -0.1, -1.7, -1.8, -0.5, 0, 0.4, -1.2, -1.8, -0.3, 0, 0.3, -1.1], borderColor: "#ec4899", borderWidth: 1.5, pointRadius: 0 }
-                    ]
-                },
-                options: chartDefaults
-            });
-
-            // GPS Track Map Chart
-            new Chart(document.getElementById("chart-gps-map"), {
-                type: "scatter",
-                data: {
+                    labels: sessionData.laps.map(l => `Lap ${l.num}`),
                     datasets: [{
-                        label: "Sonoma Raceway",
-                        data: [
-                            {x: 10, y: 10}, {x: 15, y: 25}, {x: 25, y: 45}, {x: 35, y: 55}, {x: 50, y: 60},
-                            {x: 65, y: 50}, {x: 75, y: 35}, {x: 80, y: 20}, {x: 70, y: 10}, {x: 50, y: 12},
-                            {x: 35, y: 8}, {x: 20, y: 5}, {x: 10, y: 10}
-                        ],
-                        borderColor: "#f59e0b",
-                        backgroundColor: "#f59e0b",
-                        showLine: true,
-                        borderWidth: 3,
-                        pointRadius: 0
+                        label: 'Lap Time (Seconds)',
+                        data: sessionData.laps.map(l => Number.isFinite(l.seconds) ? l.seconds : parseTimeValue(l.time)),
+                        backgroundColor: sessionData.laps.map(l => l.delta === 'BEST' ? '#10b981' : '#3b82f6'),
+                        borderRadius: 6
                     }]
                 },
                 options: {
@@ -667,12 +996,881 @@
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { display: false },
-                        y: { display: false }
+                        y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } },
+                        x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
                     }
                 }
             });
-        });
+
+            // 2. Synchronized Primary Telemetry Chart
+            const ctxPrimary = document.getElementById('chart-telemetry-primary').getContext('2d');
+            chartPrimary = new Chart(ctxPrimary, {
+                type: 'line',
+                data: {
+                    labels: telemetryPoints.map(p => p.time + 's'),
+                    datasets: [
+                        { label: 'GPS_Speed (mph)', data: telemetryPoints.map(p => p.speed), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0, yAxisID: 'ySpeed' },
+                        { label: 'SRF_RPM (rpm)', data: telemetryPoints.map(p => p.rpm), borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, yAxisID: 'yRpm' },
+                        { label: 'SRF_TPS (%)', data: telemetryPoints.map(p => p.tps), borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, yAxisID: 'yTps' },
+                        { label: 'Brake_F (psi)', data: telemetryPoints.map(p => p.brake), borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0, yAxisID: 'yBrake' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
+                        ySpeed: { type: 'linear', position: 'left', min: 0, max: 120, grid: { color: '#1f2937' }, ticks: { color: '#3b82f6' } },
+                        yRpm: { type: 'linear', position: 'right', min: 0, max: 7000, grid: { display: false }, ticks: { color: '#10b981' } },
+                        yTps: { display: false, min: 0, max: 100 },
+                        yBrake: { display: false, min: 0, max: 1200 }
+                    }
+                }
+            });
+
+            // 3. Dynamics Secondary Chart
+            const ctxSecondary = document.getElementById('chart-telemetry-secondary').getContext('2d');
+            chartSecondary = new Chart(ctxSecondary, {
+                type: 'line',
+                data: {
+                    labels: telemetryPoints.map(p => p.time + 's'),
+                    datasets: [
+                        { label: 'Steering ring (°)', data: telemetryPoints.map(p => p.steer), borderColor: '#14b8a6', borderWidth: 1.5, pointRadius: 0 },
+                        { label: 'GPS_LatAcc (G)', data: telemetryPoints.map(p => p.latg), borderColor: '#ec4899', borderWidth: 1.5, pointRadius: 0 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } },
+                        y: { grid: { color: '#1f2937' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+        }
+
+        function onScrub(val) {
+            currentPoint = Math.floor((val / 100) * (totalPoints - 1));
+            updateGaugeValues(currentPoint);
+        }
+
+        function updateGaugeValues(idx) {
+            const p = telemetryPoints[idx];
+            if (!p) return;
+
+            document.getElementById('gauge-speed').innerText = p.speed.toFixed(1);
+            document.getElementById('gauge-rpm').innerText = p.rpm;
+            document.getElementById('gauge-gear').innerText = p.gear;
+            document.getElementById('gauge-tps').innerText = p.tps;
+            document.getElementById('gauge-brake').innerText = p.brake;
+            document.getElementById('gauge-steer').innerText = p.steer + '°';
+            document.getElementById('gauge-latg').innerText = p.latg.toFixed(2);
+
+            document.getElementById('bar-speed').style.width = (p.speed / 104.5 * 100) + '%';
+            document.getElementById('bar-rpm').style.width = (p.rpm / 6800 * 100) + '%';
+            document.getElementById('bar-tps').style.width = p.tps + '%';
+            document.getElementById('bar-brake').style.width = (p.brake / 1120 * 100) + '%';
+
+            document.getElementById('time-display').innerText = formatTime(p.time);
+        }
+
+        function formatTime(secStr) {
+            const sec = parseFloat(secStr);
+            const m = Math.floor(sec / 60);
+            const s = (sec % 60).toFixed(2);
+            return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        function togglePlayback() {
+            isPlaying = !isPlaying;
+            const icon = document.getElementById('play-icon');
+            if (isPlaying) {
+                icon.className = 'fa-solid fa-pause';
+                playbackInterval = setInterval(() => {
+                    currentPoint = (currentPoint + 1) % totalPoints;
+                    document.getElementById('telemetry-scrubber').value = (currentPoint / (totalPoints - 1)) * 100;
+                    updateGaugeValues(currentPoint);
+                }, 100);
+            } else {
+                icon.className = 'fa-solid fa-play';
+                clearInterval(playbackInterval);
+            }
+        }
+
+        function resetPlayback() {
+            if (isPlaying) togglePlayback();
+            currentPoint = 0;
+            document.getElementById('telemetry-scrubber').value = 0;
+            updateGaugeValues(0);
+        }
+
+        function selectLap(lapNum) {
+            switchTab('telemetry');
+            resetPlayback();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-blue-600/20', 'text-blue-400', 'border-blue-500/40');
+                btn.classList.add('bg-racing-panelBg', 'text-slate-300');
+            });
+
+            document.getElementById(`tab-content-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+            activeBtn.classList.add('active', 'bg-blue-600/20', 'text-blue-400', 'border-blue-500/40');
+        }
+
+        function loadBrandonDataset() {
+            location.reload();
+        }
+
+        // ─── Channel alias map ─────────────────────────────────────────────────────
+        // Normalised keys (lowercase, alphanumeric only) so any capitalisation or
+        // separator style from any AiM export variant maps to the same logical channel.
+        const CHANNEL_ALIASES = {
+            time:        ['time','timestamp','elapsedtime','times','t'],
+            speed:       ['gpsspeed','speed','vehiclespeed','groundspeed','velocity','gpsvel'],
+            rpm:         ['srfrpm','enginerpm','rpm','enginespeed','motorspeed'],
+            tps:         ['srftps','throttlepos','throttleposition','throttle','tps','apps','acceleratorpos'],
+            brake:       ['brakef','brakepressure','brakefront','brakep','brake','brakepress'],
+            steer:       ['steeringring','steeringangle','steeringpos','steering','steer','steeringwheel'],
+            latg:        ['gpslatacc','lateralacc','lateralacceleration','latacc','lateralg','latg','ay'],
+            lngg:        ['gpslongacc','longitudinalacc','longacc','longg','ax'],
+            gear:        ['srfgear','gear','currentgear','selectedgear'],
+            lat:         ['gpslat','latitude','lat','gpsy'],
+            lon:         ['gpslon','longitude','lon','gpsx'],
+            alt:         ['gpsalt','altitude','alt','elevation'],
+            ect:         ['srfect','enginecoolanttemp','coolanttemp','watertemp','ect','enginetemp'],
+            oilp:        ['srfoilp','oilpressure','oilpress','oilp'],
+            oilt:        ['srfoilt','oiltemp','oiltemperature'],
+            fuelp:       ['srffuelp1','fuelpressure','fuelpress','fuelp'],
+            battery:     ['battery','srfub','ubattery','voltage','batt','vbatt'],
+            lambda:      ['srflambda1','lambda','afr','lambdasensor','o2sensor'],
+            airt:        ['srfairt','airtemperature','airtemp','ambienttemp','intakeairtemp','iat'],
+            dtemp:       ['dataloggertem','dataloggertemp','loggertemp','boxtemp'],
+            lap:         ['lap','lapnumber','lapnum','lapcount'],
+            dist:        ['distance','dist','trackdistance','odometer','travelleddistance'],
+        };
+
+        // Resolve a logical channel name to a header object, trying exact normalised
+        // match first, then substring match, then any key in the alias group.
+        function resolveChannel(headers, logicalName) {
+            const aliases = CHANNEL_ALIASES[logicalName] || [logicalName];
+            return headers.find(h => aliases.includes(h.key))
+                || headers.find(h => aliases.some(a => h.key.includes(a)))
+                || null;
+        }
+
+        // ─── ASD track-definition state ────────────────────────────────────────────
+        let asdSectors = null;   // [{name, startDist, endDist}] when ASD is loaded
+        let asdTrackName = null;
+
+        async function handleAsdUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const parsed = parseAsdFile(text, file.name);
+                asdSectors   = parsed.sectors;
+                asdTrackName = parsed.trackName;
+                const el = document.getElementById('asd-status');
+                const fn = document.getElementById('asd-filename');
+                if (el) el.classList.remove('hidden');
+                if (fn) fn.innerText = `${file.name} (${asdSectors.length} sectors)`;
+                // Re-run sector breakdown if a session is already active
+                if (telemetryPoints.length) {
+                    const sectorData = buildSectorsForSession(sessionData, asdSectors);
+                    applySectorsToLaps(sessionData.laps, sectorData, telemetryPoints);
+                    updateSectorBreakdown();
+                    renderLapTable();
+                }
+            } catch (e) {
+                alert('Could not read ASD file: ' + e.message);
+            }
+            event.target.value = '';
+        }
+
+        // Parses an AiM ASD sector-definition file.
+        // ASD files are plain text with lines like:
+        //   [Track]
+        //   Name=Sonoma Raceway
+        //   [Sector_0]
+        //   Name=Sector 1
+        //   Distance=0
+        //   [Sector_1]
+        //   Distance=1200
+        // We extract sector boundary distances (metres) in order.
+        function parseAsdFile(text, fileName) {
+            const lines = text.split(/\r?\n/);
+            const track = {};
+            const sectors = [];
+            let current = null;
+
+            for (const rawLine of lines) {
+                const line = rawLine.trim();
+                if (!line || line.startsWith('//') || line.startsWith(';')) continue;
+                const sectionMatch = line.match(/^\[(.+)\]$/);
+                if (sectionMatch) {
+                    const section = sectionMatch[1].toLowerCase();
+                    if (section === 'track') { current = track; }
+                    else if (section.startsWith('sector')) { current = {}; sectors.push(current); }
+                    else { current = null; }
+                    continue;
+                }
+                const kvMatch = line.match(/^([^=]+)=(.*)$/);
+                if (kvMatch && current !== null) {
+                    const key   = kvMatch[1].trim().toLowerCase();
+                    const value = kvMatch[2].trim();
+                    current[key] = value;
+                }
+            }
+
+            if (!sectors.length) throw new Error('No sector definitions found in ASD file.');
+
+            const parsed = sectors.map((s, i) => ({
+                name:      s.name || s.sectorname || `Sector ${i + 1}`,
+                startDist: Number(s.distance ?? s.startdistance ?? s.start ?? 0),
+                endDist:   null   // filled below
+            })).filter(s => Number.isFinite(s.startDist))
+               .sort((a, b) => a.startDist - b.startDist);
+
+            for (let i = 0; i < parsed.length; i++) {
+                parsed[i].endDist = i + 1 < parsed.length ? parsed[i + 1].startDist : null;
+            }
+
+            return { sectors: parsed, trackName: track.name || track.trackname || null };
+        }
+
+        // ─── GPS-based sector fallback ──────────────────────────────────────────────
+        // When no ASD file is available, divide each lap's GPS distance trace
+        // into three equal-thirds.  Not as accurate as AiM sector markers, but
+        // gives meaningful split data from any export that has GPS lat/lon.
+        function buildGpsSectors(points) {
+            const withGps = points.filter(p => p.lat && p.lon);
+            if (withGps.length < 10) return null;
+
+            // Compute cumulative distance (Haversine, metres)
+            let dist = 0;
+            const distances = [0];
+            for (let i = 1; i < withGps.length; i++) {
+                dist += haversineDist(withGps[i-1].lat, withGps[i-1].lon,
+                                      withGps[i].lat,   withGps[i].lon);
+                distances.push(dist);
+            }
+            const total = dist;
+            if (total < 100) return null;   // GPS not moving — not useful
+
+            const third = total / 3;
+            return [
+                { name: 'Sector 1', startDist: 0,         endDist: third   },
+                { name: 'Sector 2', startDist: third,      endDist: third*2 },
+                { name: 'Sector 3', startDist: third*2,    endDist: total   },
+            ];
+        }
+
+        function haversineDist(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 +
+                      Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        // Given sector definitions (from ASD or GPS fallback) and telemetry points
+        // for a session, compute per-lap sector times and attach them to each lap.
+        function buildSectorsForSession(session, sectors) {
+            if (!sectors || !sectors.length) return null;
+            return sectors;
+        }
+
+        function applySectorsToLaps(laps, sectors, points) {
+            if (!sectors || !laps || !points.length) return;
+            // Group points by approximate lap (use time-based lap boundaries)
+            laps.forEach(lap => {
+                // Sector times from ASD use distance; from GPS fallback also distance.
+                // If points don't have .dist, we can't do much — mark as unavailable.
+                const lapPoints = points.filter(p =>
+                    Number.isFinite(p.dist) && p.lap === lap.num
+                );
+                if (!lapPoints.length) return;
+                sectors.forEach((sector, i) => {
+                    const sectorPts = lapPoints.filter(p =>
+                        p.dist >= sector.startDist && (sector.endDist === null || p.dist < sector.endDist)
+                    );
+                    if (sectorPts.length < 2) return;
+                    const sTime = sectorPts[sectorPts.length - 1].time - sectorPts[0].time;
+                    lap[`s${i+1}Seconds`] = sTime;
+                    lap[`s${i+1}`]        = sTime.toFixed(3) + 's';
+                });
+            });
+        }
+
+        async function handleFileUpload(event) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+
+            const results = await Promise.all(files.map(readUploadedFile));
+            const sessions = results.filter(Boolean);
+            uploadedSessions.push(...sessions);
+
+            if (sessions.length) activateSession(sessions[sessions.length - 1].id);
+            event.target.value = '';
+        }
+
+        async function readUploadedFile(file) {
+            const extension = file.name.split('.').pop().toLowerCase();
+            if (extension === 'drk' || extension === 'xrk') {
+                alert(`${file.name} is an AiM binary file (${extension.toUpperCase()}). Export it as CSV from Race Studio 3 (File → Export → CSV) before uploading — this analyzer runs entirely in your browser and cannot decode proprietary binary formats.`);
+                return null;
+            }
+
+            try {
+                const text = await file.text();
+                return buildSessionFromCSV(file, text);
+            } catch (error) {
+                alert(`Could not read ${file.name}: ${error.message}`);
+                return null;
+            }
+        }
+
+        // Detects a real AiM CSV export: a block of "Key","value(s)" metadata rows,
+        // then a channel-name header row starting with "Time", then a units row,
+        // then a blank line, then the actual samples. Returns null for plain flat CSVs
+        // (e.g. a simple spreadsheet export) so the legacy parser below still handles those.
+        function splitAimSections(rows) {
+            let headerIdx = -1;
+            const scanLimit = Math.min(rows.length, 60);
+            for (let i = 0; i < scanLimit; i++) {
+                const row = rows[i];
+                if (row && row.length > 8 && String(row[0] ?? '').trim().toLowerCase() === 'time') {
+                    headerIdx = i; break;
+                }
+            }
+            if (headerIdx === -1) return null;
+
+            const metadata = {};
+            for (let i = 0; i < headerIdx; i++) {
+                const row = rows[i];
+                if (!row || !row.length) continue;
+                const key = String(row[0] ?? '').trim();
+                if (!key) continue;
+                const values = row.slice(1).map(value => String(value ?? '').trim()).filter(value => value !== '');
+                if (values.length) metadata[key] = values.length === 1 ? values[0] : values;
+            }
+
+            let dataStart = headerIdx + 1;
+            let units = null;
+            if (dataStart < rows.length) {
+                const candidate = rows[dataStart];
+                const numericCount = candidate.filter(value => Number.isFinite(Number(String(value).trim()))).length;
+                if (candidate.length > 1 && numericCount < candidate.length / 2) {
+                    units = candidate; dataStart += 1;
+                }
+            }
+            while (dataStart < rows.length && rows[dataStart].every(value => String(value).trim() === '')) dataStart += 1;
+
+            return { headerRow: rows[headerIdx], dataRows: rows.slice(dataStart), metadata, units };
+        }
+
+        function metaValue(metadata, key) {
+            const value = metadata ? metadata[key] : undefined;
+            return Array.isArray(value) ? value[0] : value;
+        }
+
+        // Builds laps from AiM "Beacon Markers" (cumulative crossing times) and
+        // "Segment Times" (the lap time for each crossing) metadata when present.
+        // This is far more accurate than guessing lap boundaries from the telemetry
+        // itself, and works even though this export format leaves the per-row Time
+        // column blank.
+        function buildLapsFromBeacons(metadata, points) {
+            if (!metadata) return null;
+            const beacons = metadata['Beacon Markers'];
+            if (!Array.isArray(beacons) || !beacons.length) return null;
+            const beaconSeconds = beacons.map(Number).filter(Number.isFinite);
+            if (!beaconSeconds.length) return null;
+            const segmentTimes = metadata['Segment Times'];
+            const segSeconds = Array.isArray(segmentTimes) ? segmentTimes.map(parseTimeValue) : [];
+
+            let prev = 0;
+            const laps = beaconSeconds.map((end, index) => {
+                const start = prev; prev = end;
+                const seconds = Number.isFinite(segSeconds[index]) ? segSeconds[index] : Math.max(0, end - start);
+                const inRange = points.filter(point => point.time >= start && point.time <= end);
+                const maxSpeed = Math.max(0, ...inRange.map(point => point.speed));
+                return {
+                    num: index + 1, seconds, time: Number.isFinite(seconds) ? formatTime(seconds) : '—',
+                    s1Seconds: Number.NaN, s2Seconds: Number.NaN, s3Seconds: Number.NaN,
+                    s1: '—', s2: '—', s3: '—',
+                    speed: round(maxSpeed), status: 'VALID', color: 'text-slate-300'
+                };
+            });
+
+            // The first segment is an out-lap (grid/pits to first crossing) and a short
+            // trailing segment is usually a partial in-lap, not a real flying lap — neither
+            // should be able to win "best lap" just for being short.
+            const n = laps.length;
+            const sortedSeconds = laps.map(lap => lap.seconds).slice().sort((a, b) => a - b);
+            const median = sortedSeconds[Math.floor(n / 2)];
+            let candidates = laps.map((_, index) => index);
+            if (n > 2) {
+                candidates = candidates.filter(index => index !== 0);
+                if (laps[n - 1].seconds < 0.6 * median) candidates = candidates.filter(index => index !== n - 1);
+            }
+            if (!candidates.length) candidates = laps.map((_, index) => index);
+            const best = Math.min(...candidates.map(index => laps[index].seconds));
+
+            laps.forEach((lap, index) => {
+                const isCandidate = candidates.includes(index);
+                lap.delta = (isCandidate && Math.abs(lap.seconds - best) < 0.005) ? 'BEST' : `+${(lap.seconds - best).toFixed(3)}`;
+                if (lap.delta === 'BEST') { lap.color = 'text-emerald-400'; lap.status = 'BEST LAP'; }
+                else if (index === 0 && n > 2) { lap.status = 'OUT LAP'; }
+                else if (index === n - 1 && n > 2 && !candidates.includes(index)) { lap.status = 'IN LAP / PARTIAL'; lap.color = 'text-amber-400'; }
+            });
+            return laps;
+        }
+
+        function buildSessionFromCSV(file, text) {
+            const rows = parseDelimitedText(text);
+            if (rows.length < 2) throw new Error('no data rows were found');
+
+            const aim = splitAimSections(rows);
+            const headerRow = aim ? aim.headerRow : rows[0];
+            const dataRows = aim ? aim.dataRows : rows.slice(1);
+            const metadata = aim ? aim.metadata : null;
+            const units = aim ? aim.units : null;
+
+            const headers = headerRow.map((header, index) => ({
+                original: (header || `Column ${index + 1}`).trim(),
+                key: normalizeColumn(header || `Column ${index + 1}`), index
+            }));
+            const records = dataRows.filter(row => row.some(value => String(value).trim() !== ''));
+            if (!records.length) throw new Error('no data rows were found');
+
+            // Use the shared CHANNEL_ALIASES map for all channel resolution.
+            const resolve  = name => resolveChannel(headers, name);
+            const valueAt  = (record, name, fallback = 0) => {
+                const col = resolve(name);
+                const v   = col ? numberFrom(record[col.index]) : fallback;
+                return Number.isFinite(v) ? v : fallback;
+            };
+            const textAt   = (record, name) => {
+                const col = resolve(name);
+                return col ? String(record[col.index] || '').trim() : '';
+            };
+            const unitFor  = name => {
+                const col = resolve(name);
+                return col && units ? String(units[col.index] || '').trim().toLowerCase() : null;
+            };
+
+            // Unit conversion: AiM raw exports use km/h for speed and bar for brake pressure.
+            // Detect via the units row; fall through as-is when the row is absent or already imperial.
+            const speedFactor = unitFor('speed') === 'km/h' ? 0.621371 : 1;
+            const brakeFactor = ['bar','kpa'].includes(unitFor('brake')) ? 14.5038 : 1;
+
+            const sampleRate = metadata ? Number(metaValue(metadata, 'Sample Rate')) : Number.NaN;
+            const dt = Number.isFinite(sampleRate) && sampleRate > 0 ? 1 / sampleRate : null;
+
+            const points = records.map((record, index) => {
+                const parsedTime = parseTimeValue(textAt(record, 'time'));
+                const time = Number.isFinite(parsedTime) ? parsedTime : (dt !== null ? index * dt : index / 10);
+                const lat  = valueAt(record, 'lat',  null);
+                const lon  = valueAt(record, 'lon',  null);
+                const dist = valueAt(record, 'dist', null);
+                return {
+                    time,
+                    speed: valueAt(record, 'speed') * speedFactor,
+                    rpm:   Math.round(valueAt(record, 'rpm')),
+                    tps:   valueAt(record, 'tps'),
+                    brake: valueAt(record, 'brake') * brakeFactor,
+                    steer: valueAt(record, 'steer'),
+                    latg:  valueAt(record, 'latg'),
+                    lngg:  valueAt(record, 'lngg'),
+                    gear:  Math.round(valueAt(record, 'gear')),
+                    lat:   Number.isFinite(lat) && lat !== 0 ? lat : null,
+                    lon:   Number.isFinite(lon) && lon !== 0 ? lon : null,
+                    dist:  Number.isFinite(dist) && dist !== null ? dist : null,
+                };
+            });
+
+            const numericChannels = headers.map(header => {
+                const values = records.map(record => numberFrom(record[header.index])).filter(Number.isFinite);
+                if (!values.length) return null;
+                const realUnit = units && units[header.index] ? String(units[header.index]).trim() : '';
+                return {
+                    name: header.original,
+                    raw: 'CSV',
+                    unit: realUnit || inferUnit(header.original),
+                    min: round(Math.min(...values)), max: round(Math.max(...values)),
+                    avg: round(values.reduce((sum, value) => sum + value, 0) / values.length), freq: 'CSV'
+                };
+            }).filter(Boolean).map((channel, index) => ({ ...channel, id: index + 1 }));
+
+            const laps = buildLapsFromBeacons(metadata, points) || buildLaps(records, headers, points);
+
+            // Sector times: prefer ASD file (loaded separately), then GPS-distance thirds.
+            const activeSectors = asdSectors || buildGpsSectors(points);
+            if (activeSectors) applySectorsToLaps(laps, activeSectors, points);
+            const topSpeed = Math.max(...points.map(point => point.speed), 0);
+            const peakLatG = Math.max(...points.map(point => Math.abs(point.latg)), 0);
+            const duration = Math.max(...points.map(point => Number(point.time)), 0);
+            const sessionLabel = metaValue(metadata, 'Segment') || metaValue(metadata, 'Championship') || textAt(records[0], ['session', 'sessionname']) || 'Uploaded session';
+            const bestLapEntry = laps.find(lap => lap.delta === 'BEST');
+            const bestLapSeconds = bestLapEntry ? bestLapEntry.seconds
+                : (laps.length ? Math.min(...laps.map(lap => lap.seconds).filter(Number.isFinite)) : Number.NaN);
+            const bestLap = Number.isFinite(bestLapSeconds) ? formatTime(bestLapSeconds) : '—';
+            const theoretical = laps.length && laps.every(lap => [lap.s1Seconds, lap.s2Seconds, lap.s3Seconds].every(Number.isFinite))
+                ? [1, 2, 3].reduce((sum, sector) => sum + Math.min(...laps.map(lap => lap[`s${sector}Seconds`])), 0)
+                : Number.NaN;
+
+            const notesParts = [`${records.length.toLocaleString()} samples`, `${numericChannels.length} numeric channels`, `${laps.length} lap${laps.length === 1 ? '' : 's'} detected`];
+            const comment = metaValue(metadata, 'Comment');
+            if (comment) notesParts.unshift(comment);
+
+            return {
+                id: `upload-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+                file: file.name,
+                track: metaValue(metadata, 'Track') || metaValue(metadata, 'Circuit') || textAt(records[0], ['track', 'circuit']) || 'Not supplied',
+                driver: metaValue(metadata, 'Racer') || metaValue(metadata, 'Driver') || textAt(records[0], ['driver', 'drivername']) || 'Not supplied',
+                vehicle: metaValue(metadata, 'Vehicle') || textAt(records[0], ['vehicle', 'car']) || 'Not supplied',
+                session: sessionLabel, notes: notesParts.join(' • '),
+                bestLap, theoBest: Number.isFinite(theoretical) ? formatTime(theoretical) : '—', topSpeed, peakLatG,
+                laps: laps.length ? laps : [{ num: 1, time: formatTime(duration), delta: 'UPLOADED', s1: '—', s2: '—', s3: '—', speed: round(topSpeed), status: 'SESSION DATA', color: 'text-emerald-400' }],
+                channels: numericChannels, telemetry: points
+            };
+        }
+
+        function buildLaps(records, headers, points) {
+            const findColumn = aliases => headers.find(header => aliases.includes(header.key)) || headers.find(header => aliases.some(alias => header.key.includes(alias)));
+            const lapColumn = headers.find(header => ['lapnumber', 'lapnum', 'lapno', 'lap'].includes(header.key));
+            const lapTimeColumn = findColumn(['laptime', 'lapduration']);
+            const sectorColumns = [1, 2, 3].map(sector => findColumn([`sector${sector}`, `s${sector}time`, `split${sector}`]));
+            const groups = [];
+
+            if (lapColumn) {
+                const byLap = new Map();
+                records.forEach((record, index) => {
+                    const label = String(record[lapColumn.index] ?? '').trim();
+                    if (!label) return;
+                    if (!byLap.has(label)) byLap.set(label, []);
+                    byLap.get(label).push(index);
+                });
+                byLap.forEach((indices, label) => groups.push({ label, indices }));
+            } else {
+                let indices = [];
+                points.forEach((point, index) => {
+                    if (indices.length && point.time < points[indices[indices.length - 1]].time) {
+                        groups.push({ label: String(groups.length + 1), indices }); indices = [];
+                    }
+                    indices.push(index);
+                });
+                if (indices.length) groups.push({ label: String(groups.length + 1), indices });
+            }
+
+            const laps = groups.map((group, index) => {
+                const first = group.indices[0]; const last = group.indices[group.indices.length - 1];
+                const rowValues = column => column ? group.indices.map(rowIndex => parseTimeValue(records[rowIndex][column.index])).filter(Number.isFinite) : [];
+                const reportedTime = rowValues(lapTimeColumn);
+                const seconds = reportedTime.length ? Math.max(...reportedTime) : points[last].time - points[first].time;
+                const sectors = sectorColumns.map(column => {
+                    const values = rowValues(column);
+                    return values.length ? Math.max(...values) : Number.NaN;
+                });
+                const maxSpeed = Math.max(...group.indices.map(rowIndex => points[rowIndex].speed), 0);
+                return {
+                    num: Number(group.label) || index + 1, seconds, time: Number.isFinite(seconds) ? formatTime(seconds) : '—',
+                    s1Seconds: sectors[0], s2Seconds: sectors[1], s3Seconds: sectors[2],
+                    s1: Number.isFinite(sectors[0]) ? formatTime(sectors[0]).replace(/^00:/, '') : '—',
+                    s2: Number.isFinite(sectors[1]) ? formatTime(sectors[1]).replace(/^00:/, '') : '—',
+                    s3: Number.isFinite(sectors[2]) ? formatTime(sectors[2]).replace(/^00:/, '') : '—',
+                    speed: round(maxSpeed), status: 'VALID', color: 'text-slate-300'
+                };
+            }).filter(lap => Number.isFinite(lap.seconds) && lap.seconds > 0);
+
+            const best = laps.length ? Math.min(...laps.map(lap => lap.seconds)) : Number.NaN;
+            laps.forEach(lap => {
+                lap.delta = Math.abs(lap.seconds - best) < 0.005 ? 'BEST' : `+${(lap.seconds - best).toFixed(3)}`;
+                if (lap.delta === 'BEST') { lap.color = 'text-emerald-400'; lap.status = 'BEST LAP'; }
+            });
+            return laps;
+        }
+
+        function parseDelimitedText(text) {
+            const delimiter = (text.split(/\r?\n/)[0].match(/;/g) || []).length > (text.split(/\r?\n/)[0].match(/,/g) || []).length ? ';' : ',';
+            return text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(line => line.trim()).map(line => {
+                const values = []; let value = ''; let quoted = false;
+                for (let i = 0; i < line.length; i++) {
+                    if (line[i] === '"' && quoted && line[i + 1] === '"') { value += '"'; i++; }
+                    else if (line[i] === '"') quoted = !quoted;
+                    else if (line[i] === delimiter && !quoted) { values.push(value); value = ''; }
+                    else value += line[i];
+                }
+                values.push(value); return values;
+            });
+        }
+
+        function normalizeColumn(value) { return String(value).toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+        function parseTimeValue(value) {
+            const text = String(value ?? '').trim();
+            if (!text) return null;
+            if (text.includes(':')) {
+                const parts = text.split(':').map(Number);
+                if (parts.some(part => !Number.isFinite(part))) return null;
+                return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+            }
+            const numeric = Number(text.replace(/[^0-9+-.eE]/g, ''));
+            return Number.isFinite(numeric) ? numeric : null;
+        }
+        function numberFrom(value) {
+            const cleaned = String(value ?? '').replace(/[^0-9+-.eE]/g, '');
+            return cleaned ? Number(cleaned) : Number.NaN;
+        }
+        function round(value) { return Math.round(value * 100) / 100; }
+        function inferUnit(name) {
+            const key = normalizeColumn(name);
+            if (key.includes('rpm')) return 'rpm'; if (key.includes('speed')) return 'mph';
+            if (key.includes('temp')) return '°'; if (key.includes('pressure') || key.includes('brake')) return 'psi';
+            if (key.includes('acc') || key.includes('latg')) return 'g'; if (key.includes('time')) return 's'; return '—';
+        }
+
+        function activateSession(id) {
+            const uploaded = uploadedSessions.find(session => session.id === id);
+            if (!uploaded) return;
+            activeSessionId = id;
+            sessionData = uploaded;
+            telemetryPoints = uploaded.telemetry;
+            currentPoint = 0;
+            refreshSessionUI();
+            renderLapTable(); renderChannelAuditTable(); refreshCharts();
+            updateGaugeValues(0);
+        }
+
+        function refreshSessionUI() {
+            const hasData = telemetryPoints.length > 0;
+            document.getElementById('session-badge').innerHTML = hasData
+                ? `<i class="fa-solid fa-file-circle-check"></i> ACTIVE: ${escapeHTML(sessionData.file)}`
+                : '<i class="fa-solid fa-circle-info"></i> NO DATA LOADED';
+            document.getElementById('hdr-track').innerText = sessionData.track || '—';
+            document.getElementById('hdr-vehicle').innerText = sessionData.vehicle || '—';
+            document.getElementById('hdr-driver').innerText = sessionData.driver || '—';
+            document.getElementById('hdr-session').innerText = sessionData.session || '—';
+            document.getElementById('active-file-name').innerText = sessionData.file || 'No file selected';
+            document.getElementById('active-session-tag').innerText = sessionData.session || 'No session';
+            document.getElementById('active-session-notes').innerText = sessionData.notes || 'Upload CSV files to begin.';
+            document.getElementById('snap-best-lap').innerText = sessionData.bestLap || '—';
+            document.getElementById('snap-best-lap-num').innerText = sessionData.driver ? `Active session (${sessionData.driver})` : 'No active session';
+            document.getElementById('snap-theo-best').innerText = sessionData.theoBest || '—';
+            document.getElementById('lbl-theo-target').innerText = sessionData.theoBest || '—';
+            const lapSeconds = sessionData.laps.map(lap => lap.seconds).filter(Number.isFinite);
+            const averageLap = lapSeconds.length ? lapSeconds.reduce((sum, lap) => sum + lap, 0) / lapSeconds.length : Number.NaN;
+            document.getElementById('snap-avg-lap').innerText = Number.isFinite(averageLap) ? formatTime(averageLap) : '—';
+            const theoreticalSeconds = parseTimeValue(sessionData.theoBest);
+            const bestSeconds = parseTimeValue(sessionData.bestLap);
+            document.getElementById('snap-theo-potential').innerText = Number.isFinite(theoreticalSeconds) && Number.isFinite(bestSeconds)
+                ? `${(bestSeconds - theoreticalSeconds).toFixed(3)}s Potential` : 'No sector data';
+            document.getElementById('snap-total-laps').innerText = `${sessionData.laps.length} Lap${sessionData.laps.length === 1 ? '' : 's'}`;
+            document.getElementById('snap-top-speed').innerText = `${round(sessionData.topSpeed || 0)} MPH`;
+            document.getElementById('snap-peak-g').innerText = `${round(sessionData.peakLatG || 0)} G`;
+
+            const container = document.getElementById('uploaded-sessions');
+            const list = document.getElementById('uploaded-sessions-list');
+            container.classList.toggle('hidden', uploadedSessions.length === 0);
+            list.innerHTML = uploadedSessions.map(session => `<button onclick="activateSession('${session.id}')" class="px-2.5 py-1.5 rounded border text-xs font-mono ${session.id === activeSessionId ? 'bg-blue-500/20 text-blue-300 border-blue-500/50' : 'bg-racing-darkBg text-slate-300 border-racing-border hover:border-slate-500'}">${escapeHTML(session.file)}</button>`).join('');
+
+            const channelCount = sessionData.channels.length;
+            const channelLabel = hasData ? `${channelCount} Channel${channelCount === 1 ? '' : 's'}` : '31 Channels';
+            const countEl = document.getElementById('stat-channel-count');
+            if (countEl) countEl.innerText = channelLabel;
+            const tabCountEl = document.getElementById('tab-channel-count');
+            if (tabCountEl) tabCountEl.innerText = hasData ? channelCount : 31;
+            const freqEl = document.getElementById('stat-data-rate');
+            if (freqEl) freqEl.innerText = hasData ? `Freq: ${estimateSampleRate()}Hz` : 'Freq: 50Hz';
+
+            const auditHeading = document.getElementById('audit-heading');
+            if (auditHeading) auditHeading.innerHTML = `<i class="fa-solid fa-list-check text-emerald-400"></i> DRK PARSED CHANNELS AUDIT (${hasData ? channelCount : 31} CHANNELS DETECTED)`;
+            const auditSubtitle = document.getElementById('audit-file-subtitle');
+            if (auditSubtitle) auditSubtitle.innerText = sessionData.file || '250831_122039_SRF091_Brandon Lewis.drk';
+            const auditBadge = document.getElementById('audit-valid-badge');
+            if (auditBadge) auditBadge.innerHTML = `<i class="fa-solid fa-shield-halved"></i> All ${hasData ? channelCount : 31} Channels Valid`;
+
+            const lapTitle = document.getElementById('lap-table-title');
+            if (lapTitle) {
+                const label = hasData ? `${(sessionData.track && sessionData.track !== 'Not supplied') ? sessionData.track.toUpperCase() : (sessionData.session || 'SESSION').toUpperCase()} - ${(sessionData.driver && sessionData.driver !== 'Not supplied') ? sessionData.driver.toUpperCase() : 'UPLOADED'} LAP TIMING` : 'SONOMA RACE 2 - BRANDON LEWIS LAP TIMING';
+                lapTitle.innerHTML = `<i class="fa-solid fa-list-ol text-emerald-400"></i> ${escapeHTML(label)}`;
+            }
+            const sectorTitle = document.getElementById('sector-breakdown-title');
+            if (sectorTitle) {
+                const label = hasData && sessionData.track && sessionData.track !== 'Not supplied' ? `${sessionData.track.toUpperCase()} BEST SECTOR BREAKDOWN` : (hasData ? 'SESSION BEST SECTOR BREAKDOWN' : 'SONOMA BEST SECTOR BREAKDOWN');
+                sectorTitle.innerHTML = `<i class="fa-solid fa-crosshairs text-purple-400"></i> ${escapeHTML(label)}`;
+            }
+
+            // Sector source badge
+            const activeSectors = asdSectors || (hasData ? buildGpsSectors(telemetryPoints) : null);
+            const sectorBadge = document.getElementById('stat-sector-source');
+            if (sectorBadge) {
+                if (activeSectors && hasData) {
+                    const source = asdSectors ? 'ASD' : 'GPS Est.';
+                    sectorBadge.innerText = `${activeSectors.length} Sectors (${source})`;
+                    sectorBadge.classList.remove('hidden', 'text-slate-500');
+                    sectorBadge.classList.add(asdSectors ? 'text-purple-400' : 'text-amber-400');
+                } else {
+                    sectorBadge.classList.add('hidden');
+                }
+            }
+
+            updateSectorBreakdown();
+            updateHighlights();
+            updateMechanicPanel();
+            updateCoachingPanel();
+        }
+
+        function estimateSampleRate() {
+            if (telemetryPoints.length < 2) return 50;
+            const times = telemetryPoints.map(point => Number(point.time)).filter(Number.isFinite);
+            if (times.length < 2) return 50;
+            const span = times[times.length - 1] - times[0];
+            if (span <= 0) return 50;
+            return Math.round((times.length - 1) / span);
+        }
+
+        function updateSectorBreakdown() {
+            const laps = sessionData.laps || [];
+            [1, 2, 3].forEach(sector => {
+                const key = `s${sector}Seconds`;
+                const withSector = laps.filter(lap => Number.isFinite(lap[key]));
+                const timeEl = document.getElementById(`sec${sector}-best-time`);
+                const lapEl = document.getElementById(`sec${sector}-best-lap`);
+                if (!timeEl || !lapEl) return;
+                if (withSector.length) {
+                    const best = withSector.reduce((a, b) => (a[key] < b[key] ? a : b));
+                    timeEl.innerText = `${best[key].toFixed(3)}s`;
+                    lapEl.innerText = `Lap ${best.num}`;
+                } else {
+                    timeEl.innerText = '—';
+                    lapEl.innerText = 'No sector data';
+                }
+            });
+        }
+
+        function updateHighlights() {
+            const container = document.getElementById('debrief-highlights-list');
+            if (!container) return;
+            const laps = sessionData.laps || [];
+            if (!laps.length) {
+                container.innerHTML = `<div class="p-2.5 rounded bg-slate-900 border-l-4 border-slate-600 text-slate-400">Upload a session to see highlights.</div>`;
+                return;
+            }
+            const bullets = [];
+            const bestLap = laps.find(lap => lap.delta === 'BEST') || laps.reduce((a, b) => (a.seconds < b.seconds ? a : b));
+            bullets.push(`<div class="p-2.5 rounded bg-slate-900 border-l-4 border-emerald-500"><span class="text-emerald-400 font-bold">[PEAK PACE]</span> Lap ${bestLap.num} set session best ${bestLap.time}${Number.isFinite(bestLap.speed) ? ` with ${bestLap.speed} mph top speed` : ''}.</div>`);
+            const slowest = laps.reduce((a, b) => (a.seconds > b.seconds ? a : b));
+            if (slowest && slowest.num !== bestLap.num) {
+                bullets.push(`<div class="p-2.5 rounded bg-slate-900 border-l-4 border-amber-500"><span class="text-amber-400 font-bold">[SLOWEST LAP]</span> Lap ${slowest.num} (${slowest.time}) was the slowest of the session.</div>`);
+            }
+            bullets.push(`<div class="p-2.5 rounded bg-slate-900 border-l-4 border-blue-500"><span class="text-blue-400 font-bold">[SESSION]</span> ${laps.length} lap${laps.length === 1 ? '' : 's'} recorded, top speed ${round(sessionData.topSpeed || 0)} mph, peak lateral load ${round(sessionData.peakLatG || 0)} G.</div>`);
+            container.innerHTML = bullets.join('');
+        }
+
+        function findChannel(aliases) {
+            const channels = sessionData.channels || [];
+            return channels.find(channel => aliases.includes(normalizeColumn(channel.name)))
+                || channels.find(channel => aliases.some(alias => normalizeColumn(channel.name).includes(alias)));
+        }
+
+        function setMechCard(valueId, badgeId, aliases, formatValue, badgeText, badgeClass) {
+            const valueEl = document.getElementById(valueId);
+            const badgeEl = document.getElementById(badgeId);
+            if (!valueEl) return;
+            const channel = findChannel(aliases);
+            if (channel && Number.isFinite(channel.max)) {
+                valueEl.innerText = formatValue(channel);
+                if (badgeEl) { badgeEl.innerText = badgeText || 'From CSV'; badgeEl.className = badgeClass || 'px-2 py-0.5 bg-slate-700/60 text-slate-300 border border-slate-600 rounded'; }
+            } else {
+                valueEl.innerText = '—';
+                if (badgeEl) { badgeEl.innerText = 'No Data'; badgeEl.className = 'px-2 py-0.5 bg-slate-800 text-slate-500 border border-slate-700 rounded'; }
+            }
+        }
+
+        function updateMechanicPanel() {
+            const cToF = celsius => celsius * 9 / 5 + 32;
+            const hasData = telemetryPoints.length > 0;
+            if (!hasData) {
+                ['mech-ect-value', 'mech-oilp-value', 'mech-fuelp-value', 'mech-oilt-value', 'mech-batt-value', 'mech-lambda-value', 'mech-airt-value', 'mech-dtemp-value'].forEach(id => {
+                    const el = document.getElementById(id); if (el) el.innerText = '—';
+                });
+                ['mech-ect-badge', 'mech-oilp-badge', 'mech-fuelp-badge', 'mech-oilt-badge', 'mech-batt-badge', 'mech-lambda-badge', 'mech-airt-badge', 'mech-dtemp-badge'].forEach(id => {
+                    const el = document.getElementById(id); if (el) { el.innerText = 'No Data'; el.className = 'px-2 py-0.5 bg-slate-800 text-slate-500 border border-slate-700 rounded'; }
+                });
+                return;
+            }
+            setMechCard('mech-ect-value', 'mech-ect-badge', ['srfect'], ch => `${cToF(ch.max).toFixed(0)} °F`);
+            setMechCard('mech-oilp-value', 'mech-oilp-badge', ['srfoilp'], ch => `${(ch.max * (String(ch.unit).toLowerCase() === 'bar' ? 14.5038 : 1)).toFixed(1)} PSI`);
+            setMechCard('mech-fuelp-value', 'mech-fuelp-badge', ['srffuelp1'], ch => `${(ch.max * (String(ch.unit).toLowerCase() === 'bar' ? 14.5038 : 1)).toFixed(1)} PSI`);
+            setMechCard('mech-oilt-value', 'mech-oilt-badge', ['srfoilt'], ch => `${cToF(ch.max).toFixed(0)} °F`);
+            setMechCard('mech-batt-value', 'mech-batt-badge', ['battery'], ch => `${ch.avg.toFixed(1)} V`);
+            setMechCard('mech-lambda-value', 'mech-lambda-badge', ['srflambda1'], ch => `${ch.avg.toFixed(2)} AFR`);
+            setMechCard('mech-airt-value', 'mech-airt-badge', ['srfairt'], ch => `${cToF(ch.max).toFixed(0)} °F`);
+            setMechCard('mech-dtemp-value', 'mech-dtemp-badge', ['dataloggertem'], ch => `${cToF(ch.max).toFixed(0)} °F`);
+        }
+
+        function updateCoachingPanel() {
+            const grid = document.getElementById('ai-coaching-grid');
+            const badge = document.getElementById('ai-priority-badge');
+            if (!grid) return;
+            if (activeSessionId === 'demo') {
+                if (demoCoachingHTML !== null) grid.innerHTML = demoCoachingHTML;
+                if (badge) badge.innerText = '4 Priority Areas Identified';
+                return;
+            }
+            const hasData = telemetryPoints.length > 0;
+            if (badge) badge.innerText = hasData ? 'Corner Data Unavailable' : 'No Session Loaded';
+            grid.innerHTML = hasData
+                ? `<div class="lg:col-span-2 bg-slate-900/90 border border-racing-border rounded-xl p-6 text-sm text-slate-400 font-mono text-center">${asdSectors ? 'Sector data loaded from ASD file. Corner-by-corner coaching also requires GPS position data (lat/lon columns) which was not found in this export.' : 'Upload a Track Definition (.asd) file alongside your telemetry to enable sector analysis, or export a CSV that includes GPS Latitude/Longitude columns for automatic GPS-based sector estimation. Lap times and channel data are available in the other tabs.'}</div>`
+                : `<div class="lg:col-span-2 bg-slate-900/90 border border-racing-border rounded-xl p-6 text-sm text-slate-400 font-mono text-center">Upload a session to generate coaching insights.</div>`;
+        }
+
+        function refreshCharts() {
+            [chartLaps, chartPrimary, chartSecondary].forEach(chart => chart && chart.destroy());
+            initCharts();
+        }
+
+        function clearAllData() {
+            if (!confirm('Clear every uploaded session and the active telemetry data?')) return;
+            if (isPlaying) togglePlayback();
+            uploadedSessions = []; activeSessionId = null; telemetryPoints = []; currentPoint = 0;
+            asdSectors = null; asdTrackName = null;
+            const asdStatus = document.getElementById('asd-status');
+            if (asdStatus) asdStatus.classList.add('hidden');
+            const asdInput = document.getElementById('asd-file-input');
+            if (asdInput) asdInput.value = '';
+            sessionData = { track: '—', vehicle: '—', driver: '—', file: '', session: '', notes: '', bestLap: '—', theoBest: '—', topSpeed: 0, peakLatG: 0, laps: [], channels: [] };
+            refreshSessionUI(); renderLapTable(); renderChannelAuditTable(); refreshCharts();
+            ['gauge-speed', 'gauge-rpm', 'gauge-gear', 'gauge-tps', 'gauge-brake', 'gauge-steer', 'gauge-latg'].forEach(id => document.getElementById(id).innerText = '—');
+        }
+
+        function escapeHTML(value) {
+            return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+        }
+
+        function exportParsedDataCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,Time,GPS_Speed,SRF_RPM,SRF_TPS,Brake_F,Steering_Ring,GPS_LatAcc\n";
+            telemetryPoints.forEach(p => {
+                csvContent += `${p.time},${p.speed},${p.rpm},${p.tps},${p.brake},${p.steer},${p.latg}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "SRF091_Brandon_Lewis_Sonoma_Telemetry.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     </script>
 </body>
 </html>
