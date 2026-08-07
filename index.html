@@ -114,9 +114,9 @@
                 <input id="csv-file-input" type="file" accept=".csv,.txt,.xrk,.drk" multiple class="hidden" onchange="handleFileUpload(event)">
 
                 <label for="asd-file-input" class="cursor-pointer bg-purple-700 hover:bg-purple-600 text-white font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-2 shadow">
-                    <i class="fa-solid fa-map-pin"></i> Track Definition <span class="opacity-60 text-xs">.asd</span>
+                    <i class="fa-solid fa-map-pin"></i> Track Definition <span class="opacity-60 text-xs">.amss/.asd</span>
                 </label>
-                <input id="asd-file-input" type="file" accept=".asd" class="hidden" onchange="handleAsdUpload(event)">
+                <input id="asd-file-input" type="file" accept=".asd,.amss" class="hidden" onchange="handleAsdUpload(event)">
                 <span id="asd-status" class="text-[10px] font-mono text-slate-500 hidden"><i class="fa-solid fa-circle-check text-purple-400"></i> <span id="asd-filename"></span></span>
 
                 <button onclick="exportParsedDataCSV()" class="bg-racing-cardBg hover:bg-slate-700 text-slate-200 border border-racing-border px-3 py-2 rounded-lg transition flex items-center gap-2 font-mono">
@@ -150,7 +150,7 @@
                 <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
                     <span id="stat-channel-count" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-blue-400">31 Channels</span>
                     <span id="stat-source-type" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-purple-400">GPS + Engine ECU</span>
-                    <span id="stat-sector-source" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-slate-500 hidden">3 Sectors</span>
+                    <span id="stat-sector-source" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-slate-500 hidden">Sectors</span>
                     <span id="stat-data-rate" class="px-2 py-1 bg-racing-darkBg rounded border border-racing-border text-emerald-400">Freq: 50Hz</span>
                 </div>
             </div>
@@ -1130,36 +1130,32 @@
             location.reload();
         }
 
-        // ─── Channel alias map ─────────────────────────────────────────────────────
-        // Normalised keys (lowercase, alphanumeric only) so any capitalisation or
-        // separator style from any AiM export variant maps to the same logical channel.
+        // ─── Channel alias map ────────────────────────────────────────────────────
         const CHANNEL_ALIASES = {
-            time:        ['time','timestamp','elapsedtime','times','t'],
-            speed:       ['gpsspeed','speed','vehiclespeed','groundspeed','velocity','gpsvel'],
-            rpm:         ['srfrpm','enginerpm','rpm','enginespeed','motorspeed'],
-            tps:         ['srftps','throttlepos','throttleposition','throttle','tps','apps','acceleratorpos'],
-            brake:       ['brakef','brakepressure','brakefront','brakep','brake','brakepress'],
-            steer:       ['steeringring','steeringangle','steeringpos','steering','steer','steeringwheel'],
-            latg:        ['gpslatacc','lateralacc','lateralacceleration','latacc','lateralg','latg','ay'],
-            lngg:        ['gpslongacc','longitudinalacc','longacc','longg','ax'],
-            gear:        ['srfgear','gear','currentgear','selectedgear'],
-            lat:         ['gpslat','latitude','lat','gpsy'],
-            lon:         ['gpslon','longitude','lon','gpsx'],
-            alt:         ['gpsalt','altitude','alt','elevation'],
-            ect:         ['srfect','enginecoolanttemp','coolanttemp','watertemp','ect','enginetemp'],
-            oilp:        ['srfoilp','oilpressure','oilpress','oilp'],
-            oilt:        ['srfoilt','oiltemp','oiltemperature'],
-            fuelp:       ['srffuelp1','fuelpressure','fuelpress','fuelp'],
-            battery:     ['battery','srfub','ubattery','voltage','batt','vbatt'],
-            lambda:      ['srflambda1','lambda','afr','lambdasensor','o2sensor'],
-            airt:        ['srfairt','airtemperature','airtemp','ambienttemp','intakeairtemp','iat'],
-            dtemp:       ['dataloggertem','dataloggertemp','loggertemp','boxtemp'],
-            lap:         ['lap','lapnumber','lapnum','lapcount'],
-            dist:        ['distance','dist','trackdistance','odometer','travelleddistance'],
+            time:    ['time','timestamp','elapsedtime','times','t'],
+            speed:   ['gpsspeed','speed','vehiclespeed','groundspeed','velocity','gpsvel'],
+            rpm:     ['srfrpm','enginerpm','rpm','enginespeed','motorspeed'],
+            tps:     ['srftps','throttlepos','throttleposition','throttle','tps','apps','acceleratorpos'],
+            brake:   ['brakef','brakepressure','brakefront','brakep','brake','brakepress'],
+            steer:   ['steeringring','steeringangle','steeringpos','steering','steer','steeringwheel'],
+            latg:    ['gpslatacc','lateralacc','lateralacceleration','latacc','lateralg','latg','ay'],
+            lngg:    ['gpslongacc','longitudinalacc','longacc','longg','ax'],
+            gear:    ['srfgear','gear','currentgear','selectedgear'],
+            lat:     ['gpslat','latitude','lat','gpsy'],
+            lon:     ['gpslon','longitude','lon','gpsx'],
+            alt:     ['gpsalt','altitude','alt','elevation'],
+            ect:     ['srfect','enginecoolanttemp','coolanttemp','watertemp','ect','enginetemp'],
+            oilp:    ['srfoilp','oilpressure','oilpress','oilp'],
+            oilt:    ['srfoilt','oiltemp','oiltemperature'],
+            fuelp:   ['srffuelp1','fuelpressure','fuelpress','fuelp'],
+            battery: ['battery','srfub','ubattery','voltage','batt','vbatt'],
+            lambda:  ['srflambda1','lambda','afr','lambdasensor','o2sensor'],
+            airt:    ['srfairt','airtemperature','airtemp','ambienttemp','intakeairtemp','iat'],
+            dtemp:   ['dataloggertem','dataloggertemp','loggertemp','boxtemp'],
+            lap:     ['lap','lapnumber','lapnum','lapcount'],
+            dist:    ['distance','dist','trackdistance','odometer','travelleddistance'],
         };
 
-        // Resolve a logical channel name to a header object, trying exact normalised
-        // match first, then substring match, then any key in the alias group.
         function resolveChannel(headers, logicalName) {
             const aliases = CHANNEL_ALIASES[logicalName] || [logicalName];
             return headers.find(h => aliases.includes(h.key))
@@ -1167,8 +1163,8 @@
                 || null;
         }
 
-        // ─── ASD track-definition state ────────────────────────────────────────────
-        let asdSectors = null;   // [{name, startDist, endDist}] when ASD is loaded
+        // ─── ASD/AMSS track-definition state ─────────────────────────────────────
+        let asdSectors = null;
         let asdTrackName = null;
 
         async function handleAsdUpload(event) {
@@ -1176,140 +1172,140 @@
             if (!file) return;
             try {
                 const text = await file.text();
-                const parsed = parseAsdFile(text, file.name);
+                const parsed = parseTrackFile(text, file.name);
                 asdSectors   = parsed.sectors;
                 asdTrackName = parsed.trackName;
                 const el = document.getElementById('asd-status');
                 const fn = document.getElementById('asd-filename');
                 if (el) el.classList.remove('hidden');
-                if (fn) fn.innerText = `${file.name} (${asdSectors.length} sectors)`;
-                // Re-run sector breakdown if a session is already active
+                if (fn) fn.innerText = file.name + ' (' + asdSectors.length + ' gates)';
                 if (telemetryPoints.length) {
-                    const sectorData = buildSectorsForSession(sessionData, asdSectors);
-                    applySectorsToLaps(sessionData.laps, sectorData, telemetryPoints);
+                    applySectorsToLaps(sessionData.laps, asdSectors, telemetryPoints);
                     updateSectorBreakdown();
                     renderLapTable();
+                    refreshSessionUI();
                 }
             } catch (e) {
-                alert('Could not read ASD file: ' + e.message);
+                alert('Could not read track file: ' + e.message);
             }
             event.target.value = '';
         }
 
-        // Parses an AiM ASD sector-definition file.
-        // ASD files are plain text with lines like:
-        //   [Track]
-        //   Name=Sonoma Raceway
-        //   [Sector_0]
-        //   Name=Sector 1
-        //   Distance=0
-        //   [Sector_1]
-        //   Distance=1200
-        // We extract sector boundary distances (metres) in order.
-        function parseAsdFile(text, fileName) {
-            const lines = text.split(/\r?\n/);
-            const track = {};
-            const sectors = [];
-            let current = null;
+        // Parses .amss (Race Studio 3 JSON) or .asd (INI-style) track definition files.
+        function parseTrackFile(text, fileName) {
+            const ext = fileName.split('.').pop().toLowerCase();
 
+            if (ext === 'amss') {
+                // AMSS: JSON with a "sectors" array of gate points.
+                // lat/lon are integer microdegrees (divide by 1e7 to get decimal degrees).
+                // type 0 = track shape point (skip), type 1 = sector split, type 2 = intermediate split
+                let data;
+                try { data = JSON.parse(text); } catch(e) { throw new Error('AMSS file is not valid JSON: ' + e.message); }
+                const raw = data.sectors || data.Sectors || [];
+                if (!raw.length) throw new Error('No sectors array found in AMSS file.');
+                const gates = raw
+                    .filter(s => s.type === 1 || s.type === 2)
+                    .sort((a, b) => a.index - b.index)
+                    .map((gate, i) => ({
+                        name: gate.name || gate.gate_point_name || ('Gate ' + (i+1)),
+                        lat:  gate.gate_point_latitude  / 1e7,
+                        lon:  gate.gate_point_longitude / 1e7,
+                        type: gate.type,
+                        index: gate.index,
+                    }));
+                if (!gates.length) throw new Error('No sector or split gate points found in AMSS file.');
+                return { sectors: gates, trackName: null, mode: 'gps-gate' };
+            }
+
+            // ASD: INI-style with [Sector_N] blocks and Distance= keys
+            const lines = text.split(/\r?\n/);
+            const track = {}, sectors = [];
+            let current = null;
             for (const rawLine of lines) {
                 const line = rawLine.trim();
                 if (!line || line.startsWith('//') || line.startsWith(';')) continue;
-                const sectionMatch = line.match(/^\[(.+)\]$/);
-                if (sectionMatch) {
-                    const section = sectionMatch[1].toLowerCase();
-                    if (section === 'track') { current = track; }
-                    else if (section.startsWith('sector')) { current = {}; sectors.push(current); }
-                    else { current = null; }
+                const sec = line.match(/^\[(.+)\]$/);
+                if (sec) {
+                    const s = sec[1].toLowerCase();
+                    current = s === 'track' ? track : s.startsWith('sector') ? (sectors.push({}), sectors[sectors.length-1]) : null;
                     continue;
                 }
-                const kvMatch = line.match(/^([^=]+)=(.*)$/);
-                if (kvMatch && current !== null) {
-                    const key   = kvMatch[1].trim().toLowerCase();
-                    const value = kvMatch[2].trim();
-                    current[key] = value;
-                }
+                const kv = line.match(/^([^=]+)=(.*)$/);
+                if (kv && current) current[kv[1].trim().toLowerCase()] = kv[2].trim();
             }
-
             if (!sectors.length) throw new Error('No sector definitions found in ASD file.');
-
-            const parsed = sectors.map((s, i) => ({
-                name:      s.name || s.sectorname || `Sector ${i + 1}`,
-                startDist: Number(s.distance ?? s.startdistance ?? s.start ?? 0),
-                endDist:   null   // filled below
-            })).filter(s => Number.isFinite(s.startDist))
-               .sort((a, b) => a.startDist - b.startDist);
-
-            for (let i = 0; i < parsed.length; i++) {
-                parsed[i].endDist = i + 1 < parsed.length ? parsed[i + 1].startDist : null;
-            }
-
-            return { sectors: parsed, trackName: track.name || track.trackname || null };
+            const parsed = sectors
+                .map((s,i) => ({ name: s.name || ('Sector '+(i+1)), startDist: Number(s.distance ?? s.startdistance ?? 0), endDist: null }))
+                .filter(s => Number.isFinite(s.startDist))
+                .sort((a,b) => a.startDist - b.startDist);
+            parsed.forEach((s,i) => { s.endDist = i+1 < parsed.length ? parsed[i+1].startDist : null; });
+            return { sectors: parsed, trackName: track.name || null, mode: 'distance' };
         }
 
-        // ─── GPS-based sector fallback ──────────────────────────────────────────────
-        // When no ASD file is available, divide each lap's GPS distance trace
-        // into three equal-thirds.  Not as accurate as AiM sector markers, but
-        // gives meaningful split data from any export that has GPS lat/lon.
+        // ─── GPS-based sector fallback (no track file) ────────────────────────────
         function buildGpsSectors(points) {
             const withGps = points.filter(p => p.lat && p.lon);
             if (withGps.length < 10) return null;
-
-            // Compute cumulative distance (Haversine, metres)
             let dist = 0;
             const distances = [0];
             for (let i = 1; i < withGps.length; i++) {
-                dist += haversineDist(withGps[i-1].lat, withGps[i-1].lon,
-                                      withGps[i].lat,   withGps[i].lon);
+                dist += haversineDist(withGps[i-1].lat, withGps[i-1].lon, withGps[i].lat, withGps[i].lon);
                 distances.push(dist);
             }
-            const total = dist;
-            if (total < 100) return null;   // GPS not moving — not useful
-
-            const third = total / 3;
+            if (dist < 100) return null;
+            const t = dist / 3;
             return [
-                { name: 'Sector 1', startDist: 0,         endDist: third   },
-                { name: 'Sector 2', startDist: third,      endDist: third*2 },
-                { name: 'Sector 3', startDist: third*2,    endDist: total   },
+                { name: 'Sector 1', startDist: 0,   endDist: t,    mode: 'distance' },
+                { name: 'Sector 2', startDist: t,   endDist: t*2,  mode: 'distance' },
+                { name: 'Sector 3', startDist: t*2, endDist: dist, mode: 'distance' },
             ];
         }
 
         function haversineDist(lat1, lon1, lat2, lon2) {
-            const R = 6371000;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2)**2 +
-                      Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2)**2;
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const R = 6371000, d2r = Math.PI/180;
+            const dLat = (lat2-lat1)*d2r, dLon = (lon2-lon1)*d2r;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*d2r)*Math.cos(lat2*d2r)*Math.sin(dLon/2)**2;
+            return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // Given sector definitions (from ASD or GPS fallback) and telemetry points
-        // for a session, compute per-lap sector times and attach them to each lap.
-        function buildSectorsForSession(session, sectors) {
-            if (!sectors || !sectors.length) return null;
-            return sectors;
+        function findGateCrossingTime(points, gateLat, gateLon) {
+            let bestDist = Infinity, bestTime = null;
+            for (const p of points) {
+                if (!p.lat || !p.lon) continue;
+                const d = haversineDist(p.lat, p.lon, gateLat, gateLon);
+                if (d < bestDist) { bestDist = d; bestTime = p.time; }
+            }
+            return bestDist < 50 ? bestTime : null;
         }
 
         function applySectorsToLaps(laps, sectors, points) {
             if (!sectors || !laps || !points.length) return;
-            // Group points by approximate lap (use time-based lap boundaries)
-            laps.forEach(lap => {
-                // Sector times from ASD use distance; from GPS fallback also distance.
-                // If points don't have .dist, we can't do much — mark as unavailable.
-                const lapPoints = points.filter(p =>
-                    Number.isFinite(p.dist) && p.lap === lap.num
-                );
-                if (!lapPoints.length) return;
-                sectors.forEach((sector, i) => {
-                    const sectorPts = lapPoints.filter(p =>
-                        p.dist >= sector.startDist && (sector.endDist === null || p.dist < sector.endDist)
-                    );
-                    if (sectorPts.length < 2) return;
-                    const sTime = sectorPts[sectorPts.length - 1].time - sectorPts[0].time;
-                    lap[`s${i+1}Seconds`] = sTime;
-                    lap[`s${i+1}`]        = sTime.toFixed(3) + 's';
+            const mode = (sectors[0] && sectors[0].lat != null) ? 'gps-gate' : 'distance';
+            if (mode === 'gps-gate') {
+                laps.forEach(lap => {
+                    const lapPts = points.filter(p => p.lap === lap.num);
+                    if (lapPts.length < 2) return;
+                    let prev = lapPts[0].time;
+                    sectors.forEach((gate, i) => {
+                        const crossing = findGateCrossingTime(lapPts, gate.lat, gate.lon);
+                        if (crossing === null) return;
+                        const sTime = crossing - prev;
+                        if (sTime > 0) { lap['s'+(i+1)+'Seconds'] = sTime; lap['s'+(i+1)] = sTime.toFixed(3)+'s'; }
+                        prev = crossing;
+                    });
                 });
-            });
+            } else {
+                laps.forEach(lap => {
+                    const lapPts = points.filter(p => Number.isFinite(p.dist) && p.lap === lap.num);
+                    if (!lapPts.length) return;
+                    sectors.forEach((sector, i) => {
+                        const sPts = lapPts.filter(p => p.dist >= sector.startDist && (sector.endDist === null || p.dist < sector.endDist));
+                        if (sPts.length < 2) return;
+                        const sTime = sPts[sPts.length-1].time - sPts[0].time;
+                        lap['s'+(i+1)+'Seconds'] = sTime; lap['s'+(i+1)] = sTime.toFixed(3)+'s';
+                    });
+                });
+            }
         }
 
         async function handleFileUpload(event) {
@@ -1327,7 +1323,7 @@
         async function readUploadedFile(file) {
             const extension = file.name.split('.').pop().toLowerCase();
             if (extension === 'drk' || extension === 'xrk') {
-                alert(`${file.name} is an AiM binary file (${extension.toUpperCase()}). Export it as CSV from Race Studio 3 (File → Export → CSV) before uploading — this analyzer runs entirely in your browser and cannot decode proprietary binary formats.`);
+                alert(`${file.name} is an AiM binary file (${extension.toUpperCase()}). Export it as CSV from Race Studio 3 (File → Export → CSV) before uploading — this analyzer runs entirely in your browser and cannot decode binary formats.`);
                 return null;
             }
 
@@ -1453,7 +1449,6 @@
             const records = dataRows.filter(row => row.some(value => String(value).trim() !== ''));
             if (!records.length) throw new Error('no data rows were found');
 
-            // Use the shared CHANNEL_ALIASES map for all channel resolution.
             const resolve  = name => resolveChannel(headers, name);
             const valueAt  = (record, name, fallback = 0) => {
                 const col = resolve(name);
@@ -1469,8 +1464,6 @@
                 return col && units ? String(units[col.index] || '').trim().toLowerCase() : null;
             };
 
-            // Unit conversion: AiM raw exports use km/h for speed and bar for brake pressure.
-            // Detect via the units row; fall through as-is when the row is absent or already imperial.
             const speedFactor = unitFor('speed') === 'km/h' ? 0.621371 : 1;
             const brakeFactor = ['bar','kpa'].includes(unitFor('brake')) ? 14.5038 : 1;
 
@@ -1480,9 +1473,9 @@
             const points = records.map((record, index) => {
                 const parsedTime = parseTimeValue(textAt(record, 'time'));
                 const time = Number.isFinite(parsedTime) ? parsedTime : (dt !== null ? index * dt : index / 10);
-                const lat  = valueAt(record, 'lat',  null);
-                const lon  = valueAt(record, 'lon',  null);
-                const dist = valueAt(record, 'dist', null);
+                const lat  = valueAt(record, 'lat',  0);
+                const lon  = valueAt(record, 'lon',  0);
+                const dist = valueAt(record, 'dist', 0);
                 return {
                     time,
                     speed: valueAt(record, 'speed') * speedFactor,
@@ -1493,9 +1486,9 @@
                     latg:  valueAt(record, 'latg'),
                     lngg:  valueAt(record, 'lngg'),
                     gear:  Math.round(valueAt(record, 'gear')),
-                    lat:   Number.isFinite(lat) && lat !== 0 ? lat : null,
-                    lon:   Number.isFinite(lon) && lon !== 0 ? lon : null,
-                    dist:  Number.isFinite(dist) && dist !== null ? dist : null,
+                    lat:   lat !== 0 ? lat : null,
+                    lon:   lon !== 0 ? lon : null,
+                    dist:  dist !== 0 ? dist : null,
                 };
             });
 
@@ -1513,8 +1506,6 @@
             }).filter(Boolean).map((channel, index) => ({ ...channel, id: index + 1 }));
 
             const laps = buildLapsFromBeacons(metadata, points) || buildLaps(records, headers, points);
-
-            // Sector times: prefer ASD file (loaded separately), then GPS-distance thirds.
             const activeSectors = asdSectors || buildGpsSectors(points);
             if (activeSectors) applySectorsToLaps(laps, activeSectors, points);
             const topSpeed = Math.max(...points.map(point => point.speed), 0);
@@ -1710,14 +1701,13 @@
                 sectorTitle.innerHTML = `<i class="fa-solid fa-crosshairs text-purple-400"></i> ${escapeHTML(label)}`;
             }
 
-            // Sector source badge
-            const activeSectors = asdSectors || (hasData ? buildGpsSectors(telemetryPoints) : null);
+            const activeSectorsForBadge = asdSectors || (hasData ? buildGpsSectors(telemetryPoints) : null);
             const sectorBadge = document.getElementById('stat-sector-source');
             if (sectorBadge) {
-                if (activeSectors && hasData) {
-                    const source = asdSectors ? 'ASD' : 'GPS Est.';
-                    sectorBadge.innerText = `${activeSectors.length} Sectors (${source})`;
-                    sectorBadge.classList.remove('hidden', 'text-slate-500');
+                if (activeSectorsForBadge && hasData) {
+                    const src = asdSectors ? 'AMSS' : 'GPS Est.';
+                    sectorBadge.innerText = activeSectorsForBadge.length + ' Gates (' + src + ')';
+                    sectorBadge.classList.remove('hidden','text-slate-500','text-amber-400','text-purple-400');
                     sectorBadge.classList.add(asdSectors ? 'text-purple-400' : 'text-amber-400');
                 } else {
                     sectorBadge.classList.add('hidden');
@@ -1831,7 +1821,7 @@
             const hasData = telemetryPoints.length > 0;
             if (badge) badge.innerText = hasData ? 'Corner Data Unavailable' : 'No Session Loaded';
             grid.innerHTML = hasData
-                ? `<div class="lg:col-span-2 bg-slate-900/90 border border-racing-border rounded-xl p-6 text-sm text-slate-400 font-mono text-center">${asdSectors ? 'Sector data loaded from ASD file. Corner-by-corner coaching also requires GPS position data (lat/lon columns) which was not found in this export.' : 'Upload a Track Definition (.asd) file alongside your telemetry to enable sector analysis, or export a CSV that includes GPS Latitude/Longitude columns for automatic GPS-based sector estimation. Lap times and channel data are available in the other tabs.'}</div>`
+                ? `<div class="lg:col-span-2 bg-slate-900/90 border border-racing-border rounded-xl p-6 text-sm text-slate-400 font-mono text-center">Corner-by-corner coaching needs track corner mapping that wasn't found in this upload. Lap times, sector bests, and channel stats for this session are available in the other tabs.</div>`
                 : `<div class="lg:col-span-2 bg-slate-900/90 border border-racing-border rounded-xl p-6 text-sm text-slate-400 font-mono text-center">Upload a session to generate coaching insights.</div>`;
         }
 
@@ -1845,10 +1835,10 @@
             if (isPlaying) togglePlayback();
             uploadedSessions = []; activeSessionId = null; telemetryPoints = []; currentPoint = 0;
             asdSectors = null; asdTrackName = null;
-            const asdStatus = document.getElementById('asd-status');
-            if (asdStatus) asdStatus.classList.add('hidden');
-            const asdInput = document.getElementById('asd-file-input');
-            if (asdInput) asdInput.value = '';
+            const asdStatusEl = document.getElementById('asd-status');
+            if (asdStatusEl) asdStatusEl.classList.add('hidden');
+            const asdInputEl = document.getElementById('asd-file-input');
+            if (asdInputEl) asdInputEl.value = '';
             sessionData = { track: '—', vehicle: '—', driver: '—', file: '', session: '', notes: '', bestLap: '—', theoBest: '—', topSpeed: 0, peakLatG: 0, laps: [], channels: [] };
             refreshSessionUI(); renderLapTable(); renderChannelAuditTable(); refreshCharts();
             ['gauge-speed', 'gauge-rpm', 'gauge-gear', 'gauge-tps', 'gauge-brake', 'gauge-steer', 'gauge-latg'].forEach(id => document.getElementById(id).innerText = '—');
